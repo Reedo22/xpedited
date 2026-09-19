@@ -1,4 +1,5 @@
 pub mod clep;
+pub mod collections;
 pub mod devicecredential;
 pub mod displaycatalog;
 pub mod licensing;

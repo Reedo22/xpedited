@@ -10,6 +10,15 @@ pub struct DisplayCatalogProductsResponse {
 #[serde(rename_all = "PascalCase")]
 pub struct Product {
     pub display_sku_availabilities: Vec<DisplaySkuAvailability>,
+    #[serde(default)]
+    pub localized_properties: Vec<LocalizedProperties>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct LocalizedProperties {
+    #[serde(default)]
+    pub product_title: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -28,6 +37,9 @@ pub struct Sku {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct SkuProperties {
+    /// Subscription SKUs (Game Pass and similar) carry no packages, so a
+    /// missing list must not fail the whole product lookup.
+    #[serde(default)]
     pub packages: Vec<Package>,
 }
 

@@ -50,6 +50,18 @@ enum SubCommand {
         #[arg(short, long, help = "Path to a keyfile with content decryption keys")]
         key_file: Option<String>,
     },
+    #[command(about = "List games on your account")]
+    Library {
+        #[arg(short, long)]
+        market: Option<String>,
+        #[arg(
+            short,
+            long,
+            default_value_t = false,
+            help = "Include apps, durables and passes, not just games"
+        )]
+        all: bool,
+    },
     Login,
     Logout {
         #[arg(long, default_value_t = false, help = "Remove device license")]
@@ -186,6 +198,9 @@ async fn main() -> ExitCode {
                 ciks,
             )
             .await
+        }
+        SubCommand::Library { market, all } => {
+            commands::library::run(&client, &tokens, market.unwrap_or("US".to_string()), all).await
         }
         SubCommand::Login => commands::login::run(&client, &tokens).await,
         SubCommand::Logout { device } => commands::logout::run(&tokens, device).await,
