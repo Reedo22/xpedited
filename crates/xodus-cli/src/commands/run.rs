@@ -208,38 +208,39 @@ pub async fn run(
         fds.push((file.0, stdf.into_raw_fd()));
     }
 
+    // The loader resolves each candidate with realpath() before comparing it
+    // against WINE_EXE_FILE_MAP, so the entries have to be unix paths - an NT
+    // path can never match, and the mapping silently does nothing.
     let mut env_value = String::new();
-    let nt_prefix = out_absolute.to_string_lossy().replace("/", "\\");
-    let nt_prefix = nt_prefix.trim_end_matches('\\');
 
-    let mut nt_entry = None;
+    let mut entry_path = None;
 
     for fd in fds {
         if !env_value.is_empty() {
             env_value.push('|');
         }
 
-        let nt_suffix = fd.0.trim_start_matches('\\');
-        let nt_path = format!("\\??\\Z:{}\\{}", nt_prefix, nt_suffix);
+        let relative = fd.0.trim_start_matches('\\').replace('\\', "/");
+        let unix_path = out_absolute.join(&relative).to_string_lossy().into_owned();
         if let Some(exe) = &exe {
             if exe == fd.0 {
-                nt_entry = Some(nt_path)
+                entry_path = Some(unix_path.clone())
             }
-        } else if nt_entry.is_none() {
-            nt_entry = Some(nt_path)
+        } else if entry_path.is_none() {
+            entry_path = Some(unix_path.clone())
         }
 
-        env_value.push_str(&format!("{}:\\??\\Z:{}\\{}", fd.1, nt_prefix, nt_suffix))
+        env_value.push_str(&format!("{}:{}", fd.1, unix_path))
     }
 
-    let Some(nt_entry) = nt_entry else {
+    let Some(entry_path) = entry_path else {
         eprintln!("Could not find .exe");
         return ExitCode::FAILURE;
     };
 
     let mut wn = Command::new(wine)
-        .arg(nt_entry)
-        .env("WINE_DLL_FILE_MAP", env_value)
+        .arg(entry_path)
+        .env("WINE_EXE_FILE_MAP", env_value)
         .spawn()
         .unwrap();
 
