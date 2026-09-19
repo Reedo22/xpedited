@@ -63,6 +63,30 @@ enum SubCommand {
         all: bool,
     },
     #[cfg(unix)]
+    #[command(about = "Put the whole PC Game Pass catalogue in the Heroic library")]
+    HeroicCatalog {
+        wine: String,
+        #[arg(long, help = "Where downloaded games should live")]
+        games_dir: Option<String>,
+        #[arg(short, long)]
+        market: Option<String>,
+        #[arg(long, help = "Wine prefix the launchers should use")]
+        prefix: Option<String>,
+        #[arg(
+            long,
+            help = "Heroic configuration directory, if it is not in the usual place"
+        )]
+        config: Option<String>,
+        #[arg(long, help = "Only take this many titles, for a quick look")]
+        limit: Option<usize>,
+        #[arg(
+            long,
+            default_value_t = false,
+            help = "Report what would be added without writing anything"
+        )]
+        dry_run: bool,
+    },
+    #[cfg(unix)]
     #[command(about = "Add an extracted game to the Heroic Games Launcher library")]
     Heroic {
         source: String,
@@ -173,7 +197,10 @@ struct CliArgs {
 /// the other offline commands it should not force device provisioning.
 #[cfg(unix)]
 fn exports_to_a_launcher(command: &SubCommand) -> bool {
-    matches!(command, SubCommand::Heroic { .. })
+    matches!(
+        command,
+        SubCommand::Heroic { .. } | SubCommand::HeroicCatalog { .. }
+    )
 }
 
 #[cfg(not(unix))]
@@ -257,6 +284,21 @@ async fn main() -> ExitCode {
             market,
             json,
         } => commands::metadata::run(&client, product, market, json).await,
+        #[cfg(unix)]
+        SubCommand::HeroicCatalog {
+            wine,
+            games_dir,
+            market,
+            prefix,
+            config,
+            limit,
+            dry_run,
+        } => {
+            commands::heroic::run_catalog(
+                &client, wine, games_dir, market, prefix, config, limit, dry_run,
+            )
+            .await
+        }
         #[cfg(unix)]
         SubCommand::Heroic {
             source,

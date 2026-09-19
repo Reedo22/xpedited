@@ -1,5 +1,16 @@
 use serde::{Deserialize, Serialize};
 
+/// `#[serde(default)]` covers a field that is absent, but the catalog also
+/// sends fields that are present and explicitly null - a title with no short
+/// description, for instance. Both should read as the default.
+fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Ok(Option::deserialize(deserializer)?.unwrap_or_default())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct DisplayCatalogProductsResponse {
@@ -9,25 +20,36 @@ pub struct DisplayCatalogProductsResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct Product {
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub product_id: String,
     pub display_sku_availabilities: Vec<DisplaySkuAvailability>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub localized_properties: Vec<LocalizedProperties>,
+}
+
+/// The catalog answers a list of ids with a list of products, and quietly
+/// leaves out any it does not recognise.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct DisplayCatalogProductListResponse {
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub products: Vec<Product>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct LocalizedProperties {
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub product_title: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub publisher_name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub developer_name: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub short_description: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub product_description: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub images: Vec<Image>,
 }
 
@@ -74,7 +96,7 @@ pub struct Sku {
 pub struct SkuProperties {
     /// Subscription SKUs (Game Pass and similar) carry no packages, so a
     /// missing list must not fail the whole product lookup.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_as_default")]
     pub packages: Vec<Package>,
 }
 
