@@ -19,6 +19,41 @@ pub struct Product {
 pub struct LocalizedProperties {
     #[serde(default)]
     pub product_title: String,
+    #[serde(default)]
+    pub publisher_name: String,
+    #[serde(default)]
+    pub developer_name: String,
+    #[serde(default)]
+    pub short_description: String,
+    #[serde(default)]
+    pub product_description: String,
+    #[serde(default)]
+    pub images: Vec<Image>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase")]
+pub struct Image {
+    /// `Poster`, `BoxArt`, `Logo`, `SuperHeroArt`, `Screenshot` and so on.
+    #[serde(default)]
+    pub image_purpose: String,
+    #[serde(default)]
+    pub uri: String,
+    #[serde(default)]
+    pub width: u32,
+    #[serde(default)]
+    pub height: u32,
+}
+
+impl Image {
+    /// The catalog hands out protocol relative uris, which are of no use to a
+    /// caller that just wants to fetch the image.
+    pub fn absolute_uri(&self) -> String {
+        match self.uri.strip_prefix("//") {
+            Some(rest) => format!("https://{rest}"),
+            None => self.uri.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
