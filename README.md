@@ -7,6 +7,12 @@
     </a>
 </p>
 
+> [!IMPORTANT]
+> **This is a fork. The original project is [Xodus](https://github.com/xodus-gaming/xodus) and all credit belongs there.**
+> The changes in this fork are LLM-assisted, which upstream does not accept, so it stays downstream and
+> nothing here should be sent to them. See [FORK.md](FORK.md) for why, and please go and support the
+> original project rather than this copy of it.
+
 > [!CAUTION]
 > This is an unofficial project - use at your own risk. It is not affiliated with, endorsed by, or sponsored by Microsoft or XBOX; all trademarks, product names, and company names or logos mentioned herein are the property of their respective owners.
 
