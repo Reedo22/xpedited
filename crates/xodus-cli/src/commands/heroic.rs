@@ -13,83 +13,6 @@ fn app_name(store_id: &str) -> String {
     format!("xodus-{store_id}")
 }
 
-/// The package config carries commented out examples of the very fields we
-/// are looking for - LIMBO ships a `**REPLACE WITH STOREID**` placeholder -
-/// so the comments have to go before anything is read out of it.
-fn strip_comments(xml: &str) -> String {
-    let mut out = String::with_capacity(xml.len());
-    let mut rest = xml;
-    while let Some(start) = rest.find("<!--") {
-        out.push_str(&rest[..start]);
-        match rest[start..].find("-->") {
-            Some(end) => rest = &rest[start + end + 3..],
-            None => return out,
-        }
-    }
-    out.push_str(rest);
-    out
-}
-
-fn tag_value(xml: &str, tag: &str) -> Option<String> {
-    let open = format!("<{tag}>");
-    let start = xml.find(&open)? + open.len();
-    let end = xml[start..].find(&format!("</{tag}>"))?;
-    Some(xml[start..start + end].trim().to_string())
-}
-
-fn attr_value(xml: &str, element: &str, attribute: &str) -> Option<String> {
-    let open = format!("<{element}");
-    let key = format!("{attribute}=\"");
-    let mut offset = 0;
-
-    while let Some(found) = xml[offset..].find(&open) {
-        let start = offset + found;
-        offset = start + open.len();
-
-        // `<Executable` is also the start of `<ExecutableList`, so the name
-        // has to end where the element name ends.
-        let tail = &xml[offset..];
-        if tail.chars().next().is_some_and(|c| c.is_alphanumeric()) {
-            continue;
-        }
-
-        let Some(close) = tail.find('>') else { break };
-        let attributes = &tail[..close];
-        if let Some(value) = attributes.find(&key) {
-            let value = value + key.len();
-            if let Some(end) = attributes[value..].find('"') {
-                return Some(attributes[value..value + end].to_string());
-            }
-        }
-    }
-    None
-}
-
-/// Packages are inconsistent about the case of this file - Wolfenstein 3D
-/// ships `MicrosoftGame.config` and Minecraft `MicrosoftGame.Config` - so try
-/// what is actually on disk rather than a fixed name.
-fn read_game_config(source: &Path) -> Option<String> {
-    let entries = std::fs::read_dir(source).ok()?;
-    for entry in entries.flatten() {
-        if entry
-            .file_name()
-            .to_string_lossy()
-            .eq_ignore_ascii_case("MicrosoftGame.config")
-        {
-            return std::fs::read_to_string(entry.path())
-                .ok()
-                .map(|xml| strip_comments(&xml));
-        }
-    }
-    None
-}
-
-/// A store id is twelve alphanumeric characters. Checking the shape keeps a
-/// leftover template value out of a catalog lookup.
-fn valid_store_id(value: &str) -> bool {
-    value.len() == 12 && value.chars().all(|c| c.is_ascii_alphanumeric())
-}
-
 fn heroic_config_dir(explicit: Option<String>) -> Option<PathBuf> {
     if let Some(explicit) = explicit {
         return Some(PathBuf::from(explicit));
@@ -346,7 +269,7 @@ pub async fn run(
         }
     };
 
-    let game_config = read_game_config(&source);
+    let game_config = crate::gameconfig::read(&source);
     // Plenty of packages - most of the Unity ones - name no executable at
     // all. That is not a problem: only the game's own executable is kept
     // encrypted in the container, so `run` picks the right one on its own
@@ -354,13 +277,10 @@ pub async fn run(
     let exe = exe.or_else(|| {
         game_config
             .as_deref()
-            .and_then(|xml| attr_value(xml, "Executable", "Name"))
+            .and_then(|xml| crate::gameconfig::attr_value(xml, "Executable", "Name"))
     });
 
-    let store_id = game_config
-        .as_deref()
-        .and_then(|xml| tag_value(xml, "StoreId"))
-        .filter(|id| valid_store_id(id));
+    let store_id = game_config.as_deref().and_then(crate::gameconfig::store_id);
 
     // The catalog is public, so art and a proper title come for free when we
     // know the store id. Without one we still have a launchable entry.

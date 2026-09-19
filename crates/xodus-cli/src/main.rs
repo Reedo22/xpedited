@@ -7,6 +7,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use xodus::tokens::TokenManager;
 
 mod commands;
+mod gameconfig;
 mod license;
 mod package;
 mod webview;

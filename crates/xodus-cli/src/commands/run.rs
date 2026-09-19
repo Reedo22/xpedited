@@ -238,6 +238,12 @@ pub async fn run(
 
     let mut entry_path = None;
 
+    // Several packages keep more than one executable beside the game -
+    // SUPERHOT ships its Unity crash handler - so taking whichever is
+    // encrypted first picks the wrong one. The package says which is the
+    // game; believe it unless the caller said otherwise.
+    let exe = exe.or_else(|| crate::gameconfig::executable(out));
+
     for fd in fds {
         if !env_value.is_empty() {
             env_value.push('|');
