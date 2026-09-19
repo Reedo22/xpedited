@@ -155,6 +155,8 @@ pub async fn run(
 
     let xvd = XvdFile::parse(&mut file).await.expect("no err");
 
+    let package_full_name = xvd.parse_package_full_name(&mut file).await.ok().flatten();
+
     let files = xvd.parse_user_package_files(&mut file).await.expect("ok");
     for (k, v) in &files {
         if k == "SegmentMetadata.bin" {
@@ -261,6 +263,22 @@ pub async fn run(
 
     let mut command = Command::new(wine);
     command.arg(entry_path).env("WINE_EXE_FILE_MAP", env_value);
+
+    // Wine's icu.dll is a forwarder to an icuuc68.dll that Wine does not
+    // ship, so .NET's globalization cannot load and a managed title dies
+    // before its first frame. Invariant mode costs culture-aware string
+    // handling, which a game is unlikely to miss, and is the difference
+    // between starting and not. Leave it alone if the caller set it.
+    if std::env::var_os("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT").is_none() {
+        command.env("DOTNET_SYSTEM_GLOBALIZATION_INVARIANT", "1");
+    }
+
+    // A packaged title asks the runtime what package it is running as. The
+    // container knows, and nothing inside the prefix does.
+    if let Some(name) = &package_full_name {
+        println!("package {name}");
+        command.env("XODUS_PACKAGE_FULL_NAME", name);
+    }
 
     match resolve_identity(client, tokens).await {
         Some((xuid, gamertag)) => {
