@@ -64,6 +64,34 @@ enum SubCommand {
         all: bool,
     },
     #[cfg(unix)]
+    #[command(about = "Add the games you have downloaded to Steam, with their store art")]
+    Steam {
+        wine: String,
+        #[arg(long, help = "Where downloaded games live; repeatable")]
+        games_dir: Vec<String>,
+        #[arg(short, long)]
+        market: Option<String>,
+        #[arg(long, help = "Wine prefix the launchers should use")]
+        prefix: Option<String>,
+        #[arg(
+            long,
+            help = "Steam userdata/<id> directory, if it is not in the usual place"
+        )]
+        userdata: Option<String>,
+        #[arg(
+            long,
+            default_value_t = false,
+            help = "Write even though Steam is running"
+        )]
+        force: bool,
+        #[arg(
+            long,
+            default_value_t = false,
+            help = "Report what would be added without writing anything"
+        )]
+        dry_run: bool,
+    },
+    #[cfg(unix)]
     #[command(about = "Re-sort Heroic's Xbox categories by what is actually downloaded")]
     HeroicSync {
         #[arg(
@@ -212,6 +240,7 @@ fn exports_to_a_launcher(command: &SubCommand) -> bool {
         SubCommand::Heroic { .. }
             | SubCommand::HeroicCatalog { .. }
             | SubCommand::HeroicSync { .. }
+            | SubCommand::Steam { .. }
     )
 }
 
@@ -296,6 +325,21 @@ async fn main() -> ExitCode {
             market,
             json,
         } => commands::metadata::run(&client, product, market, json).await,
+        #[cfg(unix)]
+        SubCommand::Steam {
+            wine,
+            games_dir,
+            market,
+            prefix,
+            userdata,
+            force,
+            dry_run,
+        } => {
+            commands::steam::run(
+                &client, wine, games_dir, market, prefix, userdata, force, dry_run,
+            )
+            .await
+        }
         #[cfg(unix)]
         SubCommand::HeroicSync { config } => commands::heroic::sync(config),
         #[cfg(unix)]

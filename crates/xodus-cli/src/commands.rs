@@ -12,4 +12,6 @@ pub mod metadata;
 #[cfg(unix)]
 pub mod run;
 pub mod splicense;
+#[cfg(unix)]
+pub mod steam;
 pub mod streaming;
