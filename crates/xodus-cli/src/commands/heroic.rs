@@ -115,7 +115,7 @@ fn heroic_config_dir(explicit: Option<String>) -> Option<PathBuf> {
 fn write_launcher(
     source: &Path,
     wine: &str,
-    exe: &str,
+    exe: Option<&str>,
     prefix: Option<&str>,
     title: &str,
 ) -> std::io::Result<PathBuf> {
@@ -134,13 +134,13 @@ fn write_launcher(
          XODUS_WINE=${{XODUS_WINE:-{wine}}}\n\
          export WINEPREFIX=${{WINEPREFIX:-{prefix}}}\n\
          \n\
-         exec \"$XODUS_CLI\" run {source} \"$XODUS_WINE\" -e {exe}\n",
+         exec \"$XODUS_CLI\" run {source} \"$XODUS_WINE\"{exe}\n",
         title = title,
         cli = cli,
         wine = wine,
         prefix = prefix,
         source = shell_quote(&source.display().to_string()),
-        exe = shell_quote(exe),
+        exe = exe.map_or(String::new(), |exe| format!(" -e {}", shell_quote(exe))),
     );
 
     std::fs::write(&path, script)?;
@@ -202,17 +202,15 @@ pub async fn run(
     };
 
     let game_config = read_game_config(&source);
-    let Some(exe) = exe.or_else(|| {
+    // Plenty of packages - most of the Unity ones - name no executable at
+    // all. That is not a problem: only the game's own executable is kept
+    // encrypted in the container, so `run` picks the right one on its own
+    // when it is not told.
+    let exe = exe.or_else(|| {
         game_config
             .as_deref()
             .and_then(|xml| attr_value(xml, "Executable", "Name"))
-    }) else {
-        eprintln!(
-            "could not work out which executable to run - pass --exe, or check that {} has a MicrosoftGame.config",
-            source.display()
-        );
-        return ExitCode::FAILURE;
-    };
+    });
 
     let store_id = game_config
         .as_deref()
@@ -282,7 +280,7 @@ pub async fn run(
     let launcher = if dry_run {
         source.join("xodus-launch.sh")
     } else {
-        match write_launcher(&source, &wine, &exe, prefix.as_deref(), &title) {
+        match write_launcher(&source, &wine, exe.as_deref(), prefix.as_deref(), &title) {
             Ok(path) => path,
             Err(err) => {
                 eprintln!("could not write the launcher script: {err}");
