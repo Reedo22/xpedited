@@ -64,6 +64,19 @@ enum SubCommand {
         all: bool,
     },
     #[cfg(unix)]
+    #[command(about = "Open the Xodus window: browse, install and play")]
+    App {
+        wine: String,
+        #[arg(long, help = "Where downloaded games live")]
+        games_dir: Option<String>,
+        #[arg(short, long)]
+        market: Option<String>,
+        #[arg(long, help = "Wine prefix to run games in")]
+        prefix: Option<String>,
+        #[arg(long, default_value_t = false, help = "Rebuild the cached catalogue")]
+        refresh: bool,
+    },
+    #[cfg(unix)]
     #[command(about = "Add the games you have downloaded to Steam, with their store art")]
     Steam {
         wine: String,
@@ -241,6 +254,7 @@ fn exports_to_a_launcher(command: &SubCommand) -> bool {
             | SubCommand::HeroicCatalog { .. }
             | SubCommand::HeroicSync { .. }
             | SubCommand::Steam { .. }
+            | SubCommand::App { .. }
     )
 }
 
@@ -325,6 +339,14 @@ async fn main() -> ExitCode {
             market,
             json,
         } => commands::metadata::run(&client, product, market, json).await,
+        #[cfg(unix)]
+        SubCommand::App {
+            wine,
+            games_dir,
+            market,
+            prefix,
+            refresh,
+        } => commands::app::run(wine, games_dir, market, prefix, refresh),
         #[cfg(unix)]
         SubCommand::Steam {
             wine,

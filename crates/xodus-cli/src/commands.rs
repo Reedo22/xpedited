@@ -1,3 +1,5 @@
+#[cfg(unix)]
+pub mod app;
 pub mod clep;
 pub mod download;
 pub mod extract;

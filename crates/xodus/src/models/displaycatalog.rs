@@ -105,6 +105,10 @@ pub struct SkuProperties {
 pub struct Package {
     #[serde(default)]
     pub content_id: Option<String>,
+    /// What the store says this will cost to download, which is the only
+    /// size available before anything has been fetched.
+    #[serde(default, deserialize_with = "null_as_default")]
+    pub max_download_size_in_bytes: u64,
     pub platform_dependencies: Vec<PlatformDependency>,
 }
 
