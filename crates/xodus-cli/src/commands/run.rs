@@ -112,6 +112,27 @@ async fn prepare(_lfiles: &HashMap<String, SegmentFile>) -> (impl AsyncFnOnce(),
     (async || {}, "".to_owned())
 }
 
+/// Ask Xbox Live who the signed in user is, so the runtime can tell the game.
+/// A title that cannot be told who is playing will not start.
+async fn resolve_identity(
+    client: &reqwest::Client,
+    tokens: &TokenManager,
+) -> Option<(String, String)> {
+    use xodus::models::secrets::Token;
+
+    let Ok(Token::Legacy(dev_token)) = tokens.get_device_sts_token() else {
+        return None;
+    };
+    let Ok(Token::Legacy(user_token)) = tokens.get_user_sts_token() else {
+        return None;
+    };
+
+    let xsts = xodus::api::xbox::run(client, dev_token, user_token, "http://xboxlive.com").await;
+    let xuid = xsts.xuid()?.to_string();
+    let gamertag = xsts.gamertag().unwrap_or("").to_string();
+    Some((xuid, gamertag))
+}
+
 pub async fn run(
     client: &reqwest::Client,
     tokens: &TokenManager,
@@ -238,11 +259,19 @@ pub async fn run(
         return ExitCode::FAILURE;
     };
 
-    let mut wn = Command::new(wine)
-        .arg(entry_path)
-        .env("WINE_EXE_FILE_MAP", env_value)
-        .spawn()
-        .unwrap();
+    let mut command = Command::new(wine);
+    command.arg(entry_path).env("WINE_EXE_FILE_MAP", env_value);
+
+    match resolve_identity(client, tokens).await {
+        Some((xuid, gamertag)) => {
+            println!("signed in as {gamertag} ({xuid})");
+            command.env("XODUS_USER_XUID", xuid);
+            command.env("XODUS_USER_GAMERTAG", gamertag);
+        }
+        None => eprintln!("could not resolve the signed in user; the game will see nobody"),
+    }
+
+    let mut wn = command.spawn().unwrap();
 
     let pid = wn.id().unwrap();
 

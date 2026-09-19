@@ -55,6 +55,22 @@ impl XstsResponse {
             .first()
             .map(|claim| claim.uhs.as_str())
     }
+
+    /// The signed in user's Xbox user id, as the token reports it.
+    pub fn xuid(&self) -> Option<&str> {
+        self.display_claims
+            .xui
+            .first()
+            .and_then(|claim| claim.xid.as_deref())
+    }
+
+    /// The signed in user's gamertag.
+    pub fn gamertag(&self) -> Option<&str> {
+        self.display_claims
+            .xui
+            .first()
+            .and_then(|claim| claim.gtg.as_deref())
+    }
 }
 
 #[derive(Debug, Serialize)]
