@@ -277,7 +277,9 @@ pub async fn run(
     let mut added = 0usize;
     let mut arted = 0usize;
     for (path, store_id) in &games {
-        let title = match store_id {
+        // One lookup per game: the title, who made it, and the art all come
+        // out of the same answer.
+        let product = match store_id {
             Some(store_id) => xodus::api::displaycatalog::find_products_by_id(
                 client,
                 store_id.clone(),
@@ -286,16 +288,16 @@ pub async fn run(
             )
             .await
             .ok()
-            .and_then(|response| {
-                response
-                    .product
-                    .localized_properties
-                    .first()
-                    .map(|props| props.product_title.clone())
-            })
-            .filter(|title| !title.is_empty()),
+            .map(|response| response.product),
             None => None,
         };
+        let properties = product
+            .as_ref()
+            .and_then(|product| product.localized_properties.first());
+        let title = properties
+            .map(|props| props.product_title.clone())
+            .filter(|title| !title.is_empty());
+        let publisher = properties.map(|props| props.publisher_name.clone());
         let title = title.unwrap_or_else(|| {
             path.file_name()
                 .map(|name| name.to_string_lossy().into_owned())
@@ -313,6 +315,13 @@ pub async fn run(
                 }
             }
         };
+
+        let mut tags = vec![("0".to_string(), Vdf::Str("Xbox".to_string()))];
+        if let Some(publisher) = &publisher
+            && !publisher.is_empty()
+        {
+            tags.push((tags.len().to_string(), Vdf::Str(publisher.clone())));
+        }
 
         let id = app_id(store_id.as_deref().unwrap_or(&title));
         let exe = format!("\"{}\"", launcher.display());
@@ -336,7 +345,11 @@ pub async fn run(
             ("DevkitOverrideAppID".to_string(), Vdf::Int(0)),
             ("LastPlayTime".to_string(), Vdf::Int(0)),
             ("FlatpakAppID".to_string(), Vdf::Str(String::new())),
-            ("tags".to_string(), Vdf::Map(vec![])),
+            // Steam turns these into library categories, which is the only
+            // grouping a non-Steam shortcut gets. One for where the game came
+            // from, and the publisher, which is worth having when several
+            // hundred of these land in a library at once.
+            ("tags".to_string(), Vdf::Map(tags)),
         ]);
 
         // Replace ours rather than pile up duplicates every run.
@@ -353,17 +366,7 @@ pub async fn run(
         }
 
         // Steam names shortcut artwork after the shortcut's own appid.
-        if let Some(store_id) = store_id
-            && !dry_run
-            && let Ok(response) = xodus::api::displaycatalog::find_products_by_id(
-                client,
-                store_id.clone(),
-                market.clone(),
-                vec!["en-US".to_string()],
-            )
-            .await
-            && let Some(props) = response.product.localized_properties.first()
-        {
+        if !dry_run && let Some(props) = properties {
             let _ = std::fs::create_dir_all(&grid);
             let art = |role: &str| {
                 ROLES
