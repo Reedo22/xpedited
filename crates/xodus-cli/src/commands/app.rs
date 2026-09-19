@@ -29,9 +29,14 @@ struct Game {
     #[serde(default)]
     hero: String,
     #[serde(default)]
+    logo: String,
+    #[serde(default)]
     size: u64,
     #[serde(default)]
     installed: bool,
+    /// "gamepass" or "owned" - a title can be both, and owned wins.
+    #[serde(default)]
+    source: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -53,6 +58,102 @@ enum Message {
     Installed {
         id: String,
     },
+}
+
+/// The titles on the account itself, which the Game Pass catalogue knows
+/// nothing about - Minecraft, and anything else bought outright.
+async fn load_owned(
+    client: &reqwest::Client,
+    tokens: &xodus::tokens::TokenManager,
+    market: &str,
+    games_dir: &str,
+) -> Vec<Game> {
+    let Ok((device_token, user_token, puid)) = super::library::ms_tokens(client, tokens).await
+    else {
+        return vec![];
+    };
+    let Ok(collection) = xodus::api::collections::query_collection(
+        client,
+        device_token,
+        user_token,
+        puid,
+        market.to_string(),
+    )
+    .await
+    else {
+        return vec![];
+    };
+
+    let ids: Vec<String> = collection
+        .items
+        .iter()
+        .filter(|item| item.is_game())
+        .map(|item| item.product_id.clone())
+        .collect();
+
+    let languages = vec!["en-US".to_string()];
+    let mut games = vec![];
+    for chunk in ids.chunks(12) {
+        let Ok(response) =
+            xodus::api::displaycatalog::find_products_by_ids(client, chunk, market, &languages)
+                .await
+        else {
+            continue;
+        };
+        for product in response.products {
+            if let Some(game) = game_from(&product, games_dir, "owned") {
+                games.push(game);
+            }
+        }
+    }
+    games
+}
+
+/// Everything the interface needs about one product.
+fn game_from(
+    product: &xodus::models::displaycatalog::Product,
+    games_dir: &str,
+    source: &str,
+) -> Option<Game> {
+    let props = product.localized_properties.first()?;
+    let art = |role: &str| {
+        ROLES
+            .iter()
+            .find(|(name, _)| *name == role)
+            .and_then(|(_, purposes)| pick(&props.images, purposes))
+            .map(|image| image.absolute_uri())
+            .unwrap_or_default()
+    };
+    let size = product
+        .display_sku_availabilities
+        .iter()
+        .flat_map(|sku| sku.sku.properties.packages.iter())
+        .filter(|package| {
+            package
+                .platform_dependencies
+                .iter()
+                .any(|dep| dep.platform_name == "Windows.Desktop")
+        })
+        .map(|package| package.max_download_size_in_bytes)
+        .max()
+        .unwrap_or(0);
+
+    Some(Game {
+        installed: installed_at(games_dir, &product.product_id),
+        id: product.product_id.clone(),
+        title: props.product_title.clone(),
+        publisher: props.publisher_name.clone(),
+        description: if props.short_description.is_empty() {
+            props.product_description.clone()
+        } else {
+            props.short_description.clone()
+        },
+        cover: art("cover"),
+        hero: art("hero"),
+        logo: art("logo"),
+        size,
+        source: source.to_string(),
+    })
 }
 
 fn cache_path() -> PathBuf {
@@ -99,45 +200,9 @@ async fn load_catalogue(
             continue;
         };
         for product in response.products {
-            let Some(props) = product.localized_properties.first() else {
-                continue;
-            };
-            let art = |role: &str| {
-                ROLES
-                    .iter()
-                    .find(|(name, _)| *name == role)
-                    .and_then(|(_, purposes)| pick(&props.images, purposes))
-                    .map(|image| image.absolute_uri())
-                    .unwrap_or_default()
-            };
-            let size = product
-                .display_sku_availabilities
-                .iter()
-                .flat_map(|sku| sku.sku.properties.packages.iter())
-                .filter(|package| {
-                    package
-                        .platform_dependencies
-                        .iter()
-                        .any(|dep| dep.platform_name == "Windows.Desktop")
-                })
-                .map(|package| package.max_download_size_in_bytes)
-                .max()
-                .unwrap_or(0);
-
-            games.push(Game {
-                installed: installed_at(games_dir, &product.product_id),
-                id: product.product_id.clone(),
-                title: props.product_title.clone(),
-                publisher: props.publisher_name.clone(),
-                description: if props.short_description.is_empty() {
-                    props.product_description.clone()
-                } else {
-                    props.short_description.clone()
-                },
-                cover: art("cover"),
-                hero: art("hero"),
-                size,
-            });
+            if let Some(game) = game_from(&product, games_dir, "gamepass") {
+                games.push(game);
+            }
         }
     }
     games.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
@@ -165,7 +230,9 @@ fn directory_size(path: &PathBuf) -> u64 {
         .sum()
 }
 
-pub fn run(
+pub async fn run(
+    client: &reqwest::Client,
+    tokens: &xodus::tokens::TokenManager,
     wine: String,
     games_dir: Option<String>,
     market: Option<String>,
@@ -179,6 +246,13 @@ pub fn run(
     let cli = std::env::current_exe()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|_| "xodus-cli".to_string());
+
+    // The account's own titles need the caller's credentials, so they are
+    // gathered here rather than on the worker thread.
+    let owned = load_owned(client, tokens, &market, &games_dir).await;
+    if !owned.is_empty() {
+        println!("{} titles on this account", owned.len());
+    }
 
     let event_loop = EventLoopBuilder::<Message>::with_user_event().build();
     let proxy = event_loop.create_proxy();
@@ -240,6 +314,16 @@ pub fn run(
                 .expect("a client");
 
             let mut games = runtime.block_on(load_catalogue(&client, &market, &games_dir, refresh));
+
+            // Owned titles take precedence: a game can be both, and owning
+            // it is the more useful thing to be told.
+            for game in owned {
+                match games.iter_mut().find(|other| other.id == game.id) {
+                    Some(existing) => existing.source = "owned".to_string(),
+                    None => games.push(game),
+                }
+            }
+            games.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
             let _ = proxy.send_event(Message::Catalogue(games.clone()));
 
             while let Ok(request) = incoming.recv() {

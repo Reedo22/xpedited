@@ -9,7 +9,7 @@ const MSA_TARGET: &str = "www.microsoft.com";
 const CLIENT_ID: &str = "{d6d5a677-0872-4ab0-9442-bb792fce85c5}";
 
 /// Acquire the MSA device + user tokens used by the licensing endpoints.
-async fn ms_tokens(
+pub(crate) async fn ms_tokens(
     client: &reqwest::Client,
     tokens: &TokenManager,
 ) -> Result<(String, String, String), String> {

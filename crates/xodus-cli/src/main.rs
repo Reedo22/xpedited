@@ -254,7 +254,6 @@ fn exports_to_a_launcher(command: &SubCommand) -> bool {
             | SubCommand::HeroicCatalog { .. }
             | SubCommand::HeroicSync { .. }
             | SubCommand::Steam { .. }
-            | SubCommand::App { .. }
     )
 }
 
@@ -346,7 +345,7 @@ async fn main() -> ExitCode {
             market,
             prefix,
             refresh,
-        } => commands::app::run(wine, games_dir, market, prefix, refresh),
+        } => commands::app::run(&client, &tokens, wine, games_dir, market, prefix, refresh).await,
         #[cfg(unix)]
         SubCommand::Steam {
             wine,
