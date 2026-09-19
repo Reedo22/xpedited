@@ -62,6 +62,14 @@ enum SubCommand {
         )]
         all: bool,
     },
+    #[command(about = "Show a product's title, description and store art")]
+    Metadata {
+        product: String,
+        #[arg(short, long)]
+        market: Option<String>,
+        #[arg(long, default_value_t = false, help = "Emit JSON for other launchers")]
+        json: bool,
+    },
     Login,
     Logout {
         #[arg(long, default_value_t = false, help = "Remove device license")]
@@ -173,7 +181,10 @@ async fn main() -> ExitCode {
     // these fully offline commands were unusable.
     let needs_device_credentials = !matches!(
         args.command,
-        SubCommand::Clep { .. } | SubCommand::SpLicense { .. } | SubCommand::Logout { .. }
+        SubCommand::Clep { .. }
+            | SubCommand::SpLicense { .. }
+            | SubCommand::Metadata { .. }
+            | SubCommand::Logout { .. }
     );
     if needs_device_credentials {
         xodus::tokens::device::ensure_device_credentials(&client, &tokens).await;
@@ -202,6 +213,11 @@ async fn main() -> ExitCode {
         SubCommand::Library { market, all } => {
             commands::library::run(&client, &tokens, market.unwrap_or("US".to_string()), all).await
         }
+        SubCommand::Metadata {
+            product,
+            market,
+            json,
+        } => commands::metadata::run(&client, product, market, json).await,
         SubCommand::Login => commands::login::run(&client, &tokens).await,
         SubCommand::Logout { device } => commands::logout::run(&tokens, device).await,
         SubCommand::Extract {
