@@ -63,6 +63,15 @@ enum SubCommand {
         all: bool,
     },
     #[cfg(unix)]
+    #[command(about = "Re-sort Heroic's Xbox categories by what is actually downloaded")]
+    HeroicSync {
+        #[arg(
+            long,
+            help = "Heroic configuration directory, if it is not in the usual place"
+        )]
+        config: Option<String>,
+    },
+    #[cfg(unix)]
     #[command(about = "Put the whole PC Game Pass catalogue in the Heroic library")]
     HeroicCatalog {
         wine: String,
@@ -199,7 +208,9 @@ struct CliArgs {
 fn exports_to_a_launcher(command: &SubCommand) -> bool {
     matches!(
         command,
-        SubCommand::Heroic { .. } | SubCommand::HeroicCatalog { .. }
+        SubCommand::Heroic { .. }
+            | SubCommand::HeroicCatalog { .. }
+            | SubCommand::HeroicSync { .. }
     )
 }
 
@@ -284,6 +295,8 @@ async fn main() -> ExitCode {
             market,
             json,
         } => commands::metadata::run(&client, product, market, json).await,
+        #[cfg(unix)]
+        SubCommand::HeroicSync { config } => commands::heroic::sync(config),
         #[cfg(unix)]
         SubCommand::HeroicCatalog {
             wine,

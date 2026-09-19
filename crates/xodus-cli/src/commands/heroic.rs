@@ -152,6 +152,101 @@ fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
+/// Heroic will not let a sideload entry be installed through its UI: the
+/// backend's install for that runner is an explicit "not implemented", and
+/// the frontend refuses to even open the dialog for it. So every entry has
+/// to claim to be installed or it could never be started at all, which
+/// leaves nothing in the library itself to tell the two states apart.
+///
+/// Heroic's own custom categories do tell them apart, and they appear as
+/// filters in its sidebar, so they are maintained here instead: one for what
+/// is on disk, one for what will be fetched on first play.
+const CATEGORY_READY: &str = "Xbox - downloaded";
+const CATEGORY_PENDING: &str = "Xbox - downloads on first play";
+
+fn sync_categories(heroic: &Path, library: &Value) -> std::io::Result<(usize, usize)> {
+    let config_path = heroic.join("store").join("config.json");
+    let mut config: Value = std::fs::read_to_string(&config_path)
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_else(|| Value::Object(Map::new()));
+    if !config.is_object() {
+        config = Value::Object(Map::new());
+    }
+
+    let empty = vec![];
+    let (mut ready, mut pending) = (vec![], vec![]);
+    for game in library["games"].as_array().unwrap_or(&empty) {
+        let Some(name) = game["app_name"].as_str() else {
+            continue;
+        };
+        if !name.starts_with("xodus-") {
+            continue;
+        }
+        let on_disk = game["folder_name"]
+            .as_str()
+            .is_some_and(|folder| Path::new(folder).is_dir());
+        if on_disk {
+            ready.push(Value::String(name.to_string()));
+        } else {
+            pending.push(Value::String(name.to_string()));
+        }
+    }
+    let counts = (ready.len(), pending.len());
+
+    let games = config
+        .as_object_mut()
+        .expect("config is an object")
+        .entry("games")
+        .or_insert_with(|| Value::Object(Map::new()));
+    if !games.is_object() {
+        *games = Value::Object(Map::new());
+    }
+    let categories = games
+        .as_object_mut()
+        .expect("games is an object")
+        .entry("customCategories")
+        .or_insert_with(|| Value::Object(Map::new()));
+    if !categories.is_object() {
+        *categories = Value::Object(Map::new());
+    }
+    let categories = categories.as_object_mut().expect("categories is an object");
+    // Anything the player has categorised by hand stays; only ours are rebuilt.
+    categories.insert(CATEGORY_READY.to_string(), Value::Array(ready));
+    categories.insert(CATEGORY_PENDING.to_string(), Value::Array(pending));
+
+    std::fs::create_dir_all(config_path.parent().unwrap())?;
+    let temporary = config_path.with_extension("json.tmp");
+    let text = serde_json::to_string_pretty(&config).map_err(std::io::Error::other)?;
+    std::fs::write(&temporary, text)?;
+    std::fs::rename(&temporary, &config_path)?;
+    Ok(counts)
+}
+
+/// Re-derive the categories from what is actually on disk. No network, so a
+/// launcher can call it the moment a download finishes.
+pub fn sync(config: Option<String>) -> ExitCode {
+    let Some(heroic) = heroic_config_dir(config) else {
+        eprintln!("could not find a Heroic configuration directory; pass --config");
+        return ExitCode::FAILURE;
+    };
+    let library: Value = std::fs::read_to_string(heroic.join("sideload_apps").join("library.json"))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_else(|| Value::Object(Map::new()));
+
+    match sync_categories(&heroic, &library) {
+        Ok((ready, pending)) => {
+            println!("{ready} downloaded, {pending} not downloaded yet");
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("could not update Heroic's categories: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
 /// Whether the library already points this title at a game that is really on
 /// disk. A catalogue pass must not repoint an installed title at an empty
 /// directory and make the player download it again.
@@ -396,10 +491,12 @@ fn write_catalog_launcher(
          export WINEPREFIX=${{WINEPREFIX:-{prefix}}}\n\
          GAME_DIR={game_dir}\n\
          \n\
-         # Listed before it is downloaded, so fetch it the first time.\n\
+         # Listed before it is downloaded, so fetch it the first time, then\n\
+         # tell Heroic it has moved out of the not-downloaded category.\n\
          if [ ! -e \"$GAME_DIR/.xodus-streaming.msixvc\" ]; then\n\
          \x20   echo \"downloading {title}...\"\n\
          \x20   \"$XODUS_CLI\" streaming {store_id} \"$GAME_DIR\" || exit 1\n\
+         \x20   \"$XODUS_CLI\" heroic-sync >/dev/null 2>&1 || true\n\
          fi\n\
          \n\
          exec \"$XODUS_CLI\" run \"$GAME_DIR\" \"$XODUS_WINE\"\n",
@@ -509,19 +606,33 @@ pub async fn run_catalog(
                 continue;
             }
 
-            // Only a Windows desktop package is something we could ever run;
-            // the rest of the catalog is console-only or a different format.
-            let runnable = product
-                .display_sku_availabilities
-                .iter()
-                .any(|availability| {
-                    availability.sku.properties.packages.iter().any(|package| {
-                        package
-                            .platform_dependencies
+            // A title is worth listing if it has a Windows desktop package, or
+            // if it names sub-products that might. Most of the catalogue is
+            // the second kind: a Game Pass subscription SKU carries no package
+            // of its own and points at the real ones through `big:`
+            // entitlement keys, which the download path already follows.
+            // Looking only for packages hid Age of Empires, every Assassin's
+            // Creed, Anno and ARK - 118 titles.
+            let runnable = product.display_sku_availabilities.iter().any(|sku| {
+                sku.sku.properties.packages.iter().any(|package| {
+                    package
+                        .platform_dependencies
+                        .iter()
+                        .any(|dep| dep.platform_name == "Windows.Desktop")
+                }) || sku.availabilities.iter().any(|availability| {
+                    availability.licensing_data.iter().any(|licensing| {
+                        licensing
+                            .satisfying_entitlement_keys
                             .iter()
-                            .any(|dep| dep.platform_name == "Windows.Desktop")
+                            .any(|satisfies| {
+                                satisfies
+                                    .entitlement_keys
+                                    .iter()
+                                    .any(|key| key.starts_with("big:"))
+                            })
                     })
-                });
+                })
+            });
             if !runnable {
                 skipped += 1;
                 continue;
@@ -606,7 +717,7 @@ pub async fn run_catalog(
 
     if dry_run {
         println!(
-            "would add {added} titles, leave {installed} already on disk alone, and skip {skipped} with no Windows desktop package"
+            "would add {added} titles, leave {installed} already on disk alone, and skip {skipped} with nothing downloadable"
         );
         return ExitCode::SUCCESS;
     }
@@ -626,8 +737,15 @@ pub async fn run_catalog(
         return ExitCode::FAILURE;
     }
 
+    match sync_categories(&heroic, &library) {
+        Ok((ready, pending)) => println!(
+            "{ready} downloaded, {pending} will download on first play - filter by category in Heroic"
+        ),
+        Err(err) => eprintln!("could not update Heroic's categories: {err}"),
+    }
+
     println!(
-        "added {added} titles to Heroic; left {installed} already on disk alone, skipped {skipped} with no Windows desktop package"
+        "added {added} titles to Heroic; left {installed} already on disk alone, skipped {skipped} with nothing downloadable"
     );
     println!("  games      {}", games_dir.display());
     println!("  launchers  {}", launchers.display());
