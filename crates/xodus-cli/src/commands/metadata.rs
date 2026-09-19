@@ -5,14 +5,14 @@ use xodus::models::displaycatalog::{Image, LocalizedProperties};
 /// The roles a launcher actually asks for, and the catalog art that suits
 /// each. The first purpose present wins, so a title missing its poster still
 /// gets a portrait image rather than nothing.
-const ROLES: &[(&str, &[&str])] = &[
+pub const ROLES: &[(&str, &[&str])] = &[
     ("cover", &["Poster", "BrandedKeyArt", "BoxArt"]),
     ("square", &["BoxArt", "FeaturePromotionalSquareArt", "Logo"]),
     ("hero", &["SuperHeroArt", "TitledHeroArt", "Hero"]),
     ("logo", &["Logo"]),
 ];
 
-fn pick<'a>(images: &'a [Image], purposes: &[&str]) -> Option<&'a Image> {
+pub fn pick<'a>(images: &'a [Image], purposes: &[&str]) -> Option<&'a Image> {
     purposes.iter().find_map(|purpose| {
         images
             .iter()

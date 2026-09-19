@@ -62,6 +62,33 @@ enum SubCommand {
         )]
         all: bool,
     },
+    #[cfg(unix)]
+    #[command(about = "Add an extracted game to the Heroic Games Launcher library")]
+    Heroic {
+        source: String,
+        wine: String,
+        #[arg(
+            short,
+            long,
+            help = "Executable to run, if the package config does not say"
+        )]
+        exe: Option<String>,
+        #[arg(short, long)]
+        market: Option<String>,
+        #[arg(long, help = "Wine prefix the launcher should use")]
+        prefix: Option<String>,
+        #[arg(
+            long,
+            help = "Heroic configuration directory, if it is not in the usual place"
+        )]
+        config: Option<String>,
+        #[arg(
+            long,
+            default_value_t = false,
+            help = "Print the library Heroic would be given instead of writing it"
+        )]
+        dry_run: bool,
+    },
     #[command(about = "Show a product's title, description and store art")]
     Metadata {
         product: String,
@@ -142,6 +169,18 @@ struct CliArgs {
     command: SubCommand,
 }
 
+/// Heroic export reads the public catalog and writes local files, so like
+/// the other offline commands it should not force device provisioning.
+#[cfg(unix)]
+fn exports_to_a_launcher(command: &SubCommand) -> bool {
+    matches!(command, SubCommand::Heroic { .. })
+}
+
+#[cfg(not(unix))]
+fn exports_to_a_launcher(_command: &SubCommand) -> bool {
+    false
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     let filter = tracing_subscriber::EnvFilter::from_env("XODUS_LOG");
@@ -185,7 +224,7 @@ async fn main() -> ExitCode {
             | SubCommand::SpLicense { .. }
             | SubCommand::Metadata { .. }
             | SubCommand::Logout { .. }
-    );
+    ) && !exports_to_a_launcher(&args.command);
     if needs_device_credentials {
         xodus::tokens::device::ensure_device_credentials(&client, &tokens).await;
     }
@@ -218,6 +257,18 @@ async fn main() -> ExitCode {
             market,
             json,
         } => commands::metadata::run(&client, product, market, json).await,
+        #[cfg(unix)]
+        SubCommand::Heroic {
+            source,
+            wine,
+            exe,
+            market,
+            prefix,
+            config,
+            dry_run,
+        } => {
+            commands::heroic::run(&client, source, wine, exe, market, prefix, config, dry_run).await
+        }
         SubCommand::Login => commands::login::run(&client, &tokens).await,
         SubCommand::Logout { device } => commands::logout::run(&tokens, device).await,
         SubCommand::Extract {
