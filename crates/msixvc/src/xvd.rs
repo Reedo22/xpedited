@@ -439,6 +439,46 @@ impl XvdFile {
         })
     }
 
+    /// The full name of the package this container holds, as the store
+    /// knows it - `Name_Version_arch__publisherhash`. A title that asks the
+    /// runtime who it is needs this, and it is the only authoritative copy:
+    /// deriving it from the manifest would mean recomputing the publisher
+    /// hash ourselves and hoping we matched.
+    pub async fn parse_package_full_name<Reader>(
+        &self,
+        mut file: Reader,
+    ) -> Result<Option<String>, Box<dyn std::error::Error>>
+    where
+        Reader: AsyncRead + AsyncSeek + Unpin,
+    {
+        let user_data_offset = self.layout.user_data.start.to_bytes().0;
+        file.seek(SeekFrom::Start(user_data_offset)).await?;
+        let user_data_header = {
+            let mut buf = XvdUserDataHeader::buffer();
+            file.read_exact(&mut buf).await?;
+            XvdUserDataHeader::from_array(&buf)
+        };
+        if user_data_header.t != 0 {
+            return Ok(None);
+        }
+
+        file.seek(SeekFrom::Start(
+            user_data_offset + user_data_header.length as u64,
+        ))
+        .await?;
+        let header = {
+            let mut buf = XvdUserDataPackageFilesHeader::buffer();
+            file.read_exact(&mut buf).await?;
+            XvdUserDataPackageFilesHeader::from_array(&buf)
+        };
+
+        let name = header.package_full_name;
+        let end = name.iter().position(|&c| c == 0).unwrap_or(name.len());
+        Ok(String::from_utf16(&name[..end])
+            .ok()
+            .filter(|n| !n.is_empty()))
+    }
+
     pub async fn parse_user_package_files<Reader>(
         &self,
         mut file: Reader,
@@ -448,7 +488,7 @@ impl XvdFile {
     {
         let mut files = HashMap::new();
 
-        let user_data_offset = self.layout.user_data.start.0 as u64;
+        let user_data_offset = self.layout.user_data.start.to_bytes().0;
         file.seek(SeekFrom::Start(user_data_offset)).await?;
         let user_data_header = {
             let mut buf = XvdUserDataHeader::buffer();
@@ -477,7 +517,17 @@ impl XvdFile {
                     .iter()
                     .position(|&c| c == 0)
                     .unwrap_or(fullname.len());
-                let pfull_name: String = String::from_utf16(&fullname[..end]).unwrap();
+                // The name is UTF-16, but nothing on disk guarantees it is well
+                // formed, and one bad name is no reason to abandon a package
+                // whose other files are perfectly readable.
+                let pfull_name = match String::from_utf16(&fullname[..end]) {
+                    Ok(name) => name,
+                    Err(err) => {
+                        let name = String::from_utf16_lossy(&fullname[..end]);
+                        eprintln!("package file name {name:?} is not valid UTF-16: {err}");
+                        name
+                    }
+                };
 
                 files.insert(
                     pfull_name,
