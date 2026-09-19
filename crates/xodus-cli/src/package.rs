@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use std::io::IsTerminal;
+
 use inquire::Select;
 use xodus::XBOX_LIVE_PACKAGES_PC;
 use xodus::api::displaycatalog::find_products_by_id;
@@ -10,9 +13,35 @@ pub async fn get_content_id(
     product: String,
     market: Option<String>,
 ) -> Result<String, Box<dyn std::error::Error>> {
+    let mut seen = HashSet::new();
+    resolve_content_id(client, product, market, &mut seen).await
+}
+
+/// Products point at each other: Age of Empires II names its own edition,
+/// which names Age of Empires II straight back. Without remembering where we
+/// have been, following those keys never returns.
+async fn resolve_content_id(
+    client: &reqwest::Client,
+    product: String,
+    market: Option<String>,
+    seen: &mut HashSet<String>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    // Some of these graphs are large, and a launcher that sits there
+    // resolving for minutes looks exactly like one that has hung.
+    const MAX_PRODUCTS: usize = 12;
+    if seen.len() >= MAX_PRODUCTS {
+        return Err(Box::new(std::io::Error::other(
+            "gave up looking for a package after a dozen related products",
+        )));
+    }
+    if !seen.insert(product.clone()) {
+        return Err(Box::new(std::io::Error::other(
+            "already followed this product",
+        )));
+    }
     let displaycatalog = find_products_by_id(
         client,
-        product,
+        product.clone(),
         market.clone().unwrap_or("neutral".to_owned()),
         vec!["en".to_string(), "neutral".to_string()],
     )
@@ -48,16 +77,37 @@ pub async fn get_content_id(
     }
     subprods.sort();
     subprods.dedup();
+    // A product lists itself among the things that satisfy it, and following
+    // that would recurse until the stack ran out.
+    subprods.retain(|candidate| *candidate != product);
 
     let Some(package) = found_package else {
         if !subprods.is_empty() {
+            // Most of the catalogue reaches its package this way, and most of
+            // the time nobody is watching - a launcher has no terminal to
+            // prompt at. Work through the candidates instead and take the
+            // first that resolves; only ask when there is somebody to ask.
+            if !std::io::stdin().is_terminal() {
+                for candidate in &subprods {
+                    if let Ok(content_id) =
+                        Box::pin(get_content_id(client, candidate.clone(), market.clone())).await
+                    {
+                        return Ok(content_id);
+                    }
+                }
+                return Err(Box::new(std::io::Error::other(format!(
+                    "none of the {} products that satisfy this one had a Windows.Desktop package",
+                    subprods.len()
+                ))));
+            }
+
             let Ok(item) = Select::new("Select files to download", subprods)
                 .with_page_size(30)
                 .prompt()
             else {
                 return Err(Box::new(std::io::Error::other("Selection failed")));
             };
-            return Box::pin(get_content_id(client, item, market)).await;
+            return Box::pin(resolve_content_id(client, item, market, seen)).await;
         }
 
         return Err(Box::new(std::io::Error::other(

@@ -152,6 +152,41 @@ fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }
 
+/// Whether this product itself carries something we could run.
+fn has_desktop_package(product: &xodus::models::displaycatalog::Product) -> bool {
+    product.display_sku_availabilities.iter().any(|sku| {
+        sku.sku.properties.packages.iter().any(|package| {
+            package
+                .platform_dependencies
+                .iter()
+                .any(|dep| dep.platform_name == "Windows.Desktop")
+        })
+    })
+}
+
+/// The products that satisfy this one. A Game Pass subscription SKU carries
+/// no package of its own and names the real ones this way. Subscription
+/// products are dropped - they are the tiers themselves, not a game - and so
+/// is the product's own id, which every product lists.
+fn satisfying_products(product: &xodus::models::displaycatalog::Product) -> Vec<String> {
+    let mut out: Vec<String> = product
+        .display_sku_availabilities
+        .iter()
+        .flat_map(|sku| sku.availabilities.iter())
+        .flat_map(|availability| availability.licensing_data.iter())
+        .flat_map(|licensing| licensing.satisfying_entitlement_keys.iter())
+        .flat_map(|satisfies| satisfies.entitlement_keys.iter())
+        .filter_map(|key| {
+            let parts: Vec<&str> = key.split(':').collect();
+            (parts.len() == 3 && parts[0] == "big").then(|| parts[1].to_string())
+        })
+        .filter(|id| *id != product.product_id && !id.starts_with("CFQ7TT"))
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// Heroic will not let a sideload entry be installed through its UI: the
 /// backend's install for that runner is an explicit "not implemented", and
 /// the frontend refuses to even open the dialog for it. So every entry has
@@ -491,11 +526,33 @@ fn write_catalog_launcher(
          export WINEPREFIX=${{WINEPREFIX:-{prefix}}}\n\
          GAME_DIR={game_dir}\n\
          \n\
-         # Listed before it is downloaded, so fetch it the first time, then\n\
-         # tell Heroic it has moved out of the not-downloaded category.\n\
-         if [ ! -e \"$GAME_DIR/.xodus-streaming.msixvc\" ]; then\n\
-         \x20   echo \"downloading {title}...\"\n\
-         \x20   \"$XODUS_CLI\" streaming {store_id} \"$GAME_DIR\" || exit 1\n\
+         # Listed before it is downloaded, so fetch it the first time. Heroic\n\
+         # has no progress bar for this - as far as it knows the game is just\n\
+         # slow to start - and these are multi-gigabyte downloads, so put the\n\
+         # progress somewhere the player can actually see it.\n\
+         MARKER=\"$GAME_DIR/.xodus-streaming.msixvc\"\n\
+         if [ ! -e \"$MARKER\" ]; then\n\
+         \x20   command -v notify-send >/dev/null &&\n\
+         \x20       notify-send -a Xodus \"Downloading {title}\" \"This runs once. The game starts when it finishes.\"\n\
+         \x20\n\
+         \x20   if [ -t 1 ]; then\n\
+         \x20       \"$XODUS_CLI\" streaming {store_id} \"$GAME_DIR\"\n\
+         \x20   elif term=$(command -v konsole || command -v gnome-terminal || command -v xterm); then\n\
+         \x20       case ${{term##*/}} in\n\
+         \x20           konsole)        \"$term\" -e \"$XODUS_CLI\" streaming {store_id} \"$GAME_DIR\" ;;\n\
+         \x20           gnome-terminal) \"$term\" -- \"$XODUS_CLI\" streaming {store_id} \"$GAME_DIR\" ;;\n\
+         \x20           *)              \"$term\" -e \"$XODUS_CLI\" streaming {store_id} \"$GAME_DIR\" ;;\n\
+         \x20       esac\n\
+         \x20   else\n\
+         \x20       \"$XODUS_CLI\" streaming {store_id} \"$GAME_DIR\"\n\
+         \x20   fi\n\
+         \x20\n\
+         \x20   # The terminal's exit code is its own, so judge by the result.\n\
+         \x20   if [ ! -e \"$MARKER\" ]; then\n\
+         \x20       command -v notify-send >/dev/null &&\n\
+         \x20           notify-send -u critical -a Xodus \"{title} did not download\" \"Run the launcher from a terminal to see why.\"\n\
+         \x20       exit 1\n\
+         \x20   fi\n\
          \x20   \"$XODUS_CLI\" heroic-sync >/dev/null 2>&1 || true\n\
          fi\n\
          \n\
@@ -566,25 +623,24 @@ pub async fn run_catalog(
     }
 
     let languages = vec!["en-US".to_string()];
-    let mut added = 0usize;
-    let mut skipped = 0usize;
-    let mut installed = 0usize;
 
-    // The catalog takes a batch of ids per request, so ask in chunks. A batch
-    // occasionally comes back unreadable; rather than lose twenty titles to
-    // it, fall back to asking for those ones one at a time.
+    // Fetch the catalogue once, then find out which of the products it points
+    // at actually have something to download. It is one extra pass over a few
+    // hundred ids, and it is the difference between a library of games and a
+    // library of disappointments: Assassin's Creed and the EA Play titles
+    // resolve to packages the EA app and Ubisoft Connect deliver, not to
+    // anything we can fetch.
+    let mut products = vec![];
     for chunk in ids.chunks(12) {
-        let products = match xodus::api::displaycatalog::find_products_by_ids(
-            client, chunk, &market, &languages,
-        )
-        .await
+        match xodus::api::displaycatalog::find_products_by_ids(client, chunk, &market, &languages)
+            .await
         {
-            Ok(response) => response.products,
-            Err(err) => {
-                eprintln!("batch lookup failed ({err}); asking for those titles individually");
-                let mut products = vec![];
+            Ok(response) => products.extend(response.products),
+            Err(_) => {
+                // A batch occasionally comes back unreadable; ask for those
+                // ones individually rather than lose twelve titles to it.
                 for id in chunk {
-                    match xodus::api::displaycatalog::find_products_by_id(
+                    if let Ok(response) = xodus::api::displaycatalog::find_products_by_id(
                         client,
                         id.clone(),
                         market.clone(),
@@ -592,48 +648,57 @@ pub async fn run_catalog(
                     )
                     .await
                     {
-                        Ok(response) => products.push(response.product),
-                        Err(err) => eprintln!("  {id}: {err}"),
+                        products.push(response.product);
                     }
                 }
-                products
             }
-        };
+        }
+    }
 
+    let mut wanted: Vec<String> = products
+        .iter()
+        .filter(|product| !has_desktop_package(product))
+        .flat_map(satisfying_products)
+        .collect();
+    wanted.sort();
+    wanted.dedup();
+
+    println!("checking {} related products for a package", wanted.len());
+    let mut downloadable: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for chunk in wanted.chunks(12) {
+        if let Ok(response) =
+            xodus::api::displaycatalog::find_products_by_ids(client, chunk, &market, &languages)
+                .await
+        {
+            for product in response.products {
+                if has_desktop_package(&product) {
+                    downloadable.insert(product.product_id.clone());
+                }
+            }
+        }
+    }
+
+    let mut added = 0usize;
+    let mut skipped = 0usize;
+    let mut installed = 0usize;
+    let mut listed: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    {
         for product in products {
             let store_id = product.product_id.clone();
             if store_id.is_empty() {
                 continue;
             }
 
-            // A title is worth listing if it has a Windows desktop package, or
-            // if it names sub-products that might. Most of the catalogue is
-            // the second kind: a Game Pass subscription SKU carries no package
-            // of its own and points at the real ones through `big:`
-            // entitlement keys, which the download path already follows.
-            // Looking only for packages hid Age of Empires, every Assassin's
-            // Creed, Anno and ARK - 118 titles.
-            let runnable = product.display_sku_availabilities.iter().any(|sku| {
-                sku.sku.properties.packages.iter().any(|package| {
-                    package
-                        .platform_dependencies
-                        .iter()
-                        .any(|dep| dep.platform_name == "Windows.Desktop")
-                }) || sku.availabilities.iter().any(|availability| {
-                    availability.licensing_data.iter().any(|licensing| {
-                        licensing
-                            .satisfying_entitlement_keys
-                            .iter()
-                            .any(|satisfies| {
-                                satisfies
-                                    .entitlement_keys
-                                    .iter()
-                                    .any(|key| key.starts_with("big:"))
-                            })
-                    })
-                })
-            });
-            if !runnable {
+            // Listing a title we could never download is no kinder than
+            // hiding one we could, so the answer is worked out rather than
+            // guessed: either this product carries a Windows desktop package,
+            // or one of the products that satisfies it does.
+            if !has_desktop_package(&product)
+                && !satisfying_products(&product)
+                    .iter()
+                    .any(|id| downloadable.contains(id))
+            {
                 skipped += 1;
                 continue;
             }
@@ -669,6 +734,7 @@ pub async fn run_catalog(
                 art_square = art_cover.clone();
             }
 
+            listed.insert(app_name(&store_id));
             if already_installed(&library, &app_name(&store_id)) {
                 installed += 1;
                 continue;
@@ -715,6 +781,29 @@ pub async fn run_catalog(
         }
     }
 
+    // An earlier pass may have listed titles this one has decided are not
+    // downloadable after all. Upserting alone would leave them behind, so
+    // drop ours that did not make the cut - unless the game is really on
+    // disk, in which case the player has it and it stays.
+    let mut pruned = 0usize;
+    if let Some(games) = library["games"].as_array_mut() {
+        games.retain(|game| {
+            let Some(name) = game["app_name"].as_str() else {
+                return true;
+            };
+            if !name.starts_with("xodus-") || listed.contains(name) {
+                return true;
+            }
+            let on_disk = game["folder_name"]
+                .as_str()
+                .is_some_and(|folder| Path::new(folder).is_dir());
+            if !on_disk {
+                pruned += 1;
+            }
+            on_disk
+        });
+    }
+
     if dry_run {
         println!(
             "would add {added} titles, leave {installed} already on disk alone, and skip {skipped} with nothing downloadable"
@@ -745,7 +834,7 @@ pub async fn run_catalog(
     }
 
     println!(
-        "added {added} titles to Heroic; left {installed} already on disk alone, skipped {skipped} with nothing downloadable"
+        "added {added} titles to Heroic; left {installed} already on disk alone, removed {pruned} no longer downloadable, skipped {skipped} with nothing downloadable"
     );
     println!("  games      {}", games_dir.display());
     println!("  launchers  {}", launchers.display());
