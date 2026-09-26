@@ -112,9 +112,31 @@ async fn prepare(_lfiles: &HashMap<String, SegmentFile>) -> (impl AsyncFnOnce(),
     (async || {}, "".to_owned())
 }
 
+/// Whether a path names a stub that exists only to start something else.
+fn looks_like_a_launcher(path: &str) -> bool {
+    let name = path.rsplit('/').next().unwrap_or(path).to_lowercase();
+    name == "launcher.exe" || name == "launch.exe" || name.ends_with("launcher.exe")
+}
+
+/// The executable in a package most likely to be the game itself: the
+/// largest one that is not a launcher, updater or installer.
+fn pick_game_binary(executables: &[(String, u64)]) -> Option<String> {
+    const HELPERS: [&str; 8] = [
+        "launcher", "updates", "update", "setup", "unins", "redist", "crashhandler", "report",
+    ];
+    executables
+        .iter()
+        .filter(|(path, _)| {
+            let name = path.rsplit('/').next().unwrap_or(path).to_lowercase();
+            !HELPERS.iter().any(|helper| name.contains(helper))
+        })
+        .max_by_key(|(_, size)| *size)
+        .map(|(path, _)| path.clone())
+}
+
 /// Ask Xbox Live who the signed in user is, so the runtime can tell the game.
 /// A title that cannot be told who is playing will not start.
-async fn resolve_identity(
+pub(crate) async fn resolve_identity(
     client: &reqwest::Client,
     tokens: &TokenManager,
 ) -> Option<(String, String)> {
@@ -244,6 +266,20 @@ pub async fn run(
     // game; believe it unless the caller said otherwise.
     let exe = exe.or_else(|| crate::gameconfig::executable(out));
 
+    // The package config and the encrypted file table do not always spell
+    // the same path the same way: one may lead with a backslash, and case
+    // is not consistent between them. Compare them on equal terms.
+    let tidy = |path: &str| {
+        path.trim_start_matches(['\\', '/'])
+            .replace('\\', "/")
+            .to_lowercase()
+    };
+    let wanted = exe.as_deref().map(tidy);
+    let mut first_executable = None;
+    // Every executable in the package, with its size, so a launcher can be
+    // swapped for the real thing below.
+    let mut executables: Vec<(String, u64)> = vec![];
+
     for fd in fds {
         if !env_value.is_empty() {
             env_value.push('|');
@@ -251,24 +287,59 @@ pub async fn run(
 
         let relative = fd.0.trim_start_matches('\\').replace('\\', "/");
         let unix_path = out_absolute.join(&relative).to_string_lossy().into_owned();
-        if let Some(exe) = &exe {
-            if exe == fd.0 {
-                entry_path = Some(unix_path.clone())
-            }
-        } else if entry_path.is_none() {
-            entry_path = Some(unix_path.clone())
+        if first_executable.is_none() {
+            first_executable = Some(unix_path.clone());
+        }
+        let size = std::fs::metadata(&unix_path).map(|m| m.len()).unwrap_or(0);
+        executables.push((unix_path.clone(), size));
+        match &wanted {
+            Some(wanted) if *wanted == tidy(&fd.0) => entry_path = Some(unix_path.clone()),
+            None if entry_path.is_none() => entry_path = Some(unix_path.clone()),
+            _ => {}
         }
 
         env_value.push_str(&format!("{}:{}", fd.1, unix_path))
     }
 
+    // Several classic titles ship a small Launcher.exe that does nothing but
+    // CreateProcess the real game. That call fails here, because the game
+    // binary is still encrypted and the launcher is not part of the
+    // decryption the loader set up. Starting the game directly works, so
+    // when the entry point is a launcher and the package holds an obvious
+    // game binary, prefer the binary.
+    if let Some(chosen) = &entry_path
+        && looks_like_a_launcher(chosen)
+        && let Some(real) = pick_game_binary(&executables)
+        && real != *chosen
+    {
+        eprintln!("{chosen} only starts another program; running {real} instead");
+        entry_path = Some(real);
+    }
+
+    // The config named something the file table does not have. Starting the
+    // only executable there is beats refusing to start at all.
+    if entry_path.is_none()
+        && let Some(fallback) = first_executable
+    {
+        if let Some(exe) = &exe {
+            eprintln!("the package lists no {exe}; starting {fallback} instead");
+        }
+        entry_path = Some(fallback);
+    }
+
     let Some(entry_path) = entry_path else {
-        eprintln!("Could not find .exe");
+        eprintln!("this package has no executable to run");
         return ExitCode::FAILURE;
     };
 
     let mut command = Command::new(wine);
-    command.arg(entry_path).env("WINE_EXE_FILE_MAP", env_value);
+    // Windows starts a game in its own folder, and titles rely on it: Godot
+    // looks for its .pck at ".", Unreal for Content/ beside the binary. We
+    // were handing them whatever directory the launcher happened to be in.
+    if let Some(home) = std::path::Path::new(&entry_path).parent() {
+        command.current_dir(home);
+    }
+    command.arg(&entry_path).env("WINE_EXE_FILE_MAP", env_value);
 
     // Wine's icu.dll is a forwarder to an icuuc68.dll that Wine does not
     // ship, so .NET's globalization cannot load and a managed title dies

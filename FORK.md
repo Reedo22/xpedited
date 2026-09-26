@@ -1,5 +1,8 @@
 # About this fork
 
+This fork is called **Xpedited**. It is a fork of Xodus, not a replacement for
+it and not a competitor to it.
+
 **The project this comes from is [Xodus](https://github.com/xodus-gaming/xodus).
 Go there first.** If you found this fork looking for a way to run Store and
 Game Pass titles on Linux, Xodus is the project doing that work, and it is the
@@ -18,6 +21,9 @@ made from 2026-09-18 onwards.
 
 This fork is not endorsed by, affiliated with, or a competitor to the Xodus
 project. It exists because of one person's games and one person's machine.
+The name is only there so the two can be told apart in a launcher list and a
+process table; where the code says `xodus`, that is upstream's and it keeps
+upstream's name.
 
 ## Why there is an LLM in the commit history
 

@@ -2,167 +2,1362 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Xodus</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Xpedited</title>
 <style>
-  :root {
-    --bg:#0d1117; --side:#12161d; --panel:#161b22; --line:#242b35;
-    --text:#e6edf3; --dim:#8b949e; --green:#107c10; --green-hi:#16a516;
-  }
-  * { box-sizing:border-box; }
-  html,body { margin:0; height:100%; background:var(--bg); color:var(--text);
-    font:14px/1.5 "Segoe UI",Inter,system-ui,sans-serif; overflow:hidden; }
-  #shell { display:grid; grid-template-columns:300px 1fr; height:100%; }
+:root {
+  --bg: #0b0b0b;
+  --rail: #141414;
+  --raised: #1f1f1f;
+  --raised-hover: #2a2a2a;
+  --line: #2e2e2e;
+  --text: #ffffff;
+  --muted: #9b9b9b;
+  --green: #107c10;
+  --green-hover: #0d660d;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI Variable Text", "Segoe UI", Selawik, Inter, system-ui, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #3a3a3a; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #4d4d4d; }
+::-webkit-scrollbar-track { background: transparent; }
 
-  /* ---- left: the library list, Steam style ---- */
-  aside { background:var(--side); border-right:1px solid var(--line); display:flex; flex-direction:column; }
-  .brand { display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--line); }
-  .mark { width:24px; height:24px; border-radius:5px; background:var(--green);
-    display:grid; place-items:center; font-weight:700; font-size:13px; color:#fff; }
-  .brand b { font-size:14px; font-weight:600; }
-  .find { padding:10px 12px; }
-  .find input { width:100%; padding:7px 10px; background:#0b0e13; border:1px solid var(--line);
-    border-radius:6px; color:var(--text); font-size:13px; }
-  .find input:focus { outline:none; border-color:var(--green); }
-  .filters { display:flex; gap:4px; padding:0 12px 10px; }
-  .chip { flex:1; text-align:center; padding:5px; border-radius:5px; cursor:pointer;
-    font-size:12px; color:var(--dim); background:#0b0e13; }
-  .chip.on { background:var(--green); color:#fff; }
-  #list { flex:1; overflow-y:auto; padding:0 6px 14px; }
-  .sect { padding:12px 10px 6px; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); }
-  .row { display:flex; align-items:center; gap:9px; padding:6px 10px; border-radius:6px; cursor:pointer; }
-  .row:hover { background:#1a1f27; }
-  .row.on { background:#1f2630; }
-  .row img { width:22px; height:30px; object-fit:cover; border-radius:3px; background:#0b0e13; flex:none; }
-  .row span { font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .row.off span { color:var(--dim); }
+#shell { display: flex; height: 100%; }
 
-  /* ---- right: the selected game ---- */
-  main { position:relative; overflow-y:auto; }
-  #empty { display:grid; place-items:center; height:100%; color:var(--dim); }
-  #hero { height:46%; min-height:280px; background:#0b0e13 center/cover no-repeat; position:relative; }
-  #hero:after { content:""; position:absolute; inset:0;
-    background:linear-gradient(to bottom, transparent 35%, var(--bg) 100%); }
-  #head { position:relative; margin-top:-70px; padding:0 34px; z-index:1; }
-  #logo { max-height:70px; max-width:46%; display:none; }
-  #title { font-size:27px; font-weight:600; margin:0; }
-  #pub { color:var(--dim); font-size:13px; margin-top:2px; }
-  #acts { display:flex; align-items:center; gap:12px; margin:20px 0 0; }
-  button { font:inherit; border:0; border-radius:6px; padding:11px 30px; cursor:pointer; }
-  .go { background:var(--green); color:#fff; font-weight:600; font-size:15px; }
-  .go:hover { background:var(--green-hi); }
-  .go[disabled] { background:#262c35; color:var(--dim); cursor:default; }
-  .meta { color:var(--dim); font-size:12px; }
-  .bar { width:230px; height:6px; border-radius:99px; background:#262c35; overflow:hidden; display:none; }
-  .bar.on { display:block; }
-  .bar > i { display:block; height:100%; width:0; background:var(--green); transition:width .4s; }
-  #desc { padding:22px 34px 40px; color:var(--dim); font-size:13.5px; max-width:760px; }
-  .tagline { display:inline-block; font-size:11px; padding:2px 8px; border-radius:99px;
-    background:#1f2630; color:var(--dim); margin-left:8px; vertical-align:middle; }
+/* ---------- left rail ---------- */
+#rail {
+  width: 272px;
+  flex: none;
+  background: var(--rail);
+  border-right: 1px solid #000;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 0 0;
+}
+#account {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 2px 12px 16px;
+  padding: 8px;
+  border-radius: 6px;
+}
+#account:hover { background: var(--raised); }
+#avatar, .avatarlike {
+  width: 40px; height: 40px; flex: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1a8f1a, #0b5c0b);
+  display: grid; place-items: center;
+  font-weight: 700; font-size: 17px;
+}
+#who { min-width: 0; text-align: left; }
+#gamertag, #accountnote { display: block; }
+#gamertag {
+  font-weight: 600; font-size: 15px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#accountnote { color: var(--muted); font-size: 12px; }
+
+nav { padding: 0 12px; }
+.nav {
+  display: flex; align-items: center; gap: 14px;
+  width: 100%; padding: 9px 10px; margin-bottom: 2px;
+  border-radius: 5px; text-align: left; font-size: 14.5px;
+  position: relative;
+}
+.nav:hover { background: var(--raised); }
+.nav.on { background: var(--raised); font-weight: 600; }
+.nav.on::before {
+  content: ""; position: absolute; left: -7px; top: 50%;
+  transform: translateY(-50%);
+  width: 3px; height: 18px; border-radius: 2px; background: var(--green);
+}
+.nav svg { width: 19px; height: 19px; flex: none; opacity: .92; }
+
+.railhead {
+  color: var(--muted); font-size: 11.5px; font-weight: 600;
+  letter-spacing: .04em; text-transform: uppercase;
+  padding: 18px 22px 8px;
+}
+#recent { flex: 1; overflow-y: auto; padding: 0 12px 14px; }
+.recent {
+  display: flex; align-items: center; gap: 11px;
+  width: 100%; padding: 6px 10px; border-radius: 5px; text-align: left;
+}
+.recent:hover { background: var(--raised); }
+.recent img, .recent .ph {
+  width: 30px; height: 30px; flex: none;
+  border-radius: 4px; object-fit: cover; background: #333;
+}
+.recent > span {
+  min-width: 0; text-align: left;
+}
+.recent .line {
+  display: block; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; font-size: 13.5px;
+}
+.recent .note { display: block; color: var(--muted); font-size: 11.5px; }
+
+/* ---------- main ---------- */
+#main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#bar {
+  height: 56px; flex: none;
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 28px;
+  border-bottom: 1px solid transparent;
+  transition: border-color .15s, background .15s;
+}
+#bar.scrolled { border-color: var(--line); background: rgba(11,11,11,.85); backdrop-filter: blur(8px); }
+#back {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center; flex: none;
+  visibility: hidden;
+}
+#back:hover { background: var(--raised); }
+#back.show { visibility: visible; }
+#searchwrap {
+  display: flex; align-items: center; gap: 9px;
+  background: var(--raised); border: 1px solid var(--line);
+  border-radius: 4px; padding: 0 11px; height: 32px; width: 320px;
+}
+#searchwrap:focus-within { border-color: #6d6d6d; }
+#searchwrap svg { width: 15px; height: 15px; opacity: .65; flex: none; }
+#search {
+  border: 0; background: none; color: var(--text);
+  outline: none; width: 100%; font-size: 13.5px; user-select: text;
+}
+#count { color: var(--muted); font-size: 12.5px; }
+#bar .spacer { flex: 1; }
+
+/* ---------- account menu ---------- */
+#menu {
+  position: absolute; top: 62px; left: 12px; width: 252px; z-index: 40;
+  background: #232323; border: 1px solid #383838; border-radius: 8px;
+  padding: 6px; box-shadow: 0 18px 44px rgba(0,0,0,.66);
+  display: none;
+}
+#menu.show { display: block; }
+#menu .head {
+  display: flex; align-items: center; gap: 11px;
+  padding: 10px 10px 12px; border-bottom: 1px solid #333; margin-bottom: 6px;
+}
+#menu .head .who { min-width: 0; }
+#menu .head .avatarlike, #settings .avatarlike { width: 36px; height: 36px; font-size: 15px; }
+#menu .head b { display: block; font-size: 14.5px; }
+#menu .head span { display: block; color: var(--muted); font-size: 12px; }
+#menu button.item {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; padding: 9px 10px; border-radius: 5px;
+  text-align: left; font-size: 14px;
+}
+#menu button.item:hover { background: #303030; }
+#menu button.item svg { width: 17px; height: 17px; opacity: .85; flex: none; }
+#menu hr { border: 0; border-top: 1px solid #333; margin: 6px 2px; }
+
+/* ---------- featured cards ---------- */
+.promos {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  padding: 4px 28px 8px;
+}
+.promo {
+  position: relative; aspect-ratio: 16 / 7; overflow: hidden;
+  border-radius: 8px; background: var(--raised);
+  display: flex; align-items: flex-end; text-align: left;
+}
+.promo.short { aspect-ratio: 16 / 4; }
+.promo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.promo .veil {
+  position: absolute; inset: 0;
+  background: linear-gradient(0deg, rgba(0,0,0,.88) 2%, rgba(0,0,0,.25) 46%, rgba(0,0,0,0) 74%);
+}
+.promo .copy { position: relative; padding: 18px 20px; }
+.promo b { display: block; font-size: 17px; font-weight: 600; }
+.promo span { display: block; color: #cfcfcf; font-size: 13px; margin-top: 3px; }
+.promo:hover { outline: 2px solid rgba(255,255,255,.85); outline-offset: -2px; }
+
+/* square tiles, as the real app uses for what you already have */
+.tile.sq { width: 168px; }
+.tile.sq .cover { aspect-ratio: 1 / 1; }
+
+.arrows { margin-left: auto; display: flex; gap: 6px; }
+.arrows button {
+  width: 30px; height: 30px; border-radius: 4px;
+  background: var(--raised); border: 1px solid var(--line);
+  display: grid; place-items: center;
+}
+.arrows button:hover { background: var(--raised-hover); }
+.arrows svg { width: 14px; height: 14px; }
+
+/* ---------- settings ---------- */
+#settings { padding: 0 28px 60px; max-width: 760px; }
+#settings h2.page { margin-left: 0; margin-right: 0; }
+.group { margin-top: 30px; }
+.group h3 {
+  font-size: 12px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--muted); margin: 0 0 12px;
+}
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 13.5px; margin-bottom: 6px; }
+.field .hint { color: var(--muted); font-size: 12px; margin-top: 5px; }
+.field input {
+  width: 100%; height: 34px; padding: 0 11px;
+  background: var(--raised); border: 1px solid var(--line);
+  border-radius: 4px; color: var(--text); font-size: 13.5px;
+  outline: none; user-select: text;
+}
+.field input:focus { border-color: #6d6d6d; }
+.card {
+  background: var(--raised); border: 1px solid var(--line);
+  border-radius: 6px; padding: 16px 18px;
+  display: flex; align-items: center; gap: 16px;
+}
+.card .grow { flex: 1; min-width: 0; }
+.card b { font-size: 14.5px; }
+.card p { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+#saved { color: var(--green); font-size: 13px; min-height: 18px; margin-top: 12px; }
+.btn.small { height: 32px; padding: 0 15px; font-size: 13px; }
+
+#scroll { flex: 1; overflow-y: auto; overflow-x: hidden; overflow-anchor: none; }
+#pages { padding-bottom: 48px; overflow-anchor: none; }
+
+/* ---------- hero ---------- */
+#hero {
+  position: relative; height: 340px; margin-bottom: 8px;
+  display: flex; align-items: flex-end;
+  overflow: hidden;
+}
+#hero .art {
+  position: absolute; inset: 0;
+  background-size: cover; background-position: center 28%;
+}
+#hero .scrim {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(90deg, var(--bg) 4%, rgba(11,11,11,.85) 34%, rgba(11,11,11,0) 72%),
+    linear-gradient(0deg, var(--bg) 1%, rgba(11,11,11,0) 42%);
+}
+#hero .inner { position: relative; padding: 0 28px 34px; max-width: 620px; }
+#hero .kicker {
+  font-size: 11.5px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--green);
+  margin-bottom: 10px;
+}
+#hero h1 { font-size: 38px; line-height: 1.1; margin: 0 0 10px; font-weight: 600; }
+#hero img.logo {
+  height: 96px; width: auto; max-width: 400px;
+  object-fit: contain; object-position: left bottom;
+  margin-bottom: 12px; display: block;
+}
+#hero .logoslot { height: 96px; margin-bottom: 12px; }
+#hero p {
+  color: #d2d2d2; margin: 0 0 18px; font-size: 14px; line-height: 1.5;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--green); padding: 0 20px; height: 38px;
+  border-radius: 4px; font-weight: 600; font-size: 14px;
+}
+.btn:hover { background: var(--green-hover); }
+.btn.ghost { background: var(--raised); border: 1px solid var(--line); }
+.btn.ghost:hover { background: var(--raised-hover); }
+.btn[disabled] { background: #333; cursor: default; }
+.btn.danger { background: #8b2020; border-color: #8b2020; }
+.btn.danger:hover { background: #a02626; }
+.badge.playing { background: #0a6ebd; }
+.btn svg { width: 15px; height: 15px; }
+.row { display: flex; gap: 10px; align-items: center; }
+
+/* ---------- shelves ---------- */
+.shelf { margin: 26px 0 8px; }
+.shelfhead {
+  display: flex; align-items: baseline; gap: 12px;
+  padding: 0 28px 12px;
+}
+.shelfhead h2 { font-size: 19px; font-weight: 600; margin: 0; }
+.shelfhead em { font-style: normal; color: var(--muted); font-size: 12.5px; }
+.strip {
+  display: flex; align-items: flex-start;
+  gap: 16px; overflow-x: auto; overflow-y: hidden;
+  padding: 4px 28px 14px;
+  scrollbar-width: thin;
+}
+.strip::-webkit-scrollbar { height: 8px; }
+
+.tile { width: 152px; flex: none; text-align: left; }
+.grid .tile { width: auto; }
+.cover {
+  position: relative; width: 100%; aspect-ratio: 2 / 3;
+  border-radius: 5px; overflow: hidden; background: var(--raised);
+  transition: transform .13s ease, box-shadow .13s ease;
+}
+.tile:hover .cover {
+  transform: scale(1.04);
+  box-shadow: 0 8px 22px rgba(0,0,0,.6);
+  outline: 2px solid rgba(255,255,255,.85);
+  outline-offset: -2px;
+}
+.cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cover .ph {
+  width: 100%; height: 100%;
+  display: grid; place-items: center; padding: 10px;
+  text-align: center; font-size: 12.5px; color: #cfcfcf;
+  background: linear-gradient(160deg, #262626, #171717);
+}
+.badge {
+  position: absolute; top: 7px; left: 7px;
+  background: rgba(0,0,0,.72); backdrop-filter: blur(4px);
+  border-radius: 3px; padding: 2px 6px;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .02em;
+}
+.badge.installed { background: var(--green); }
+.tile h3 {
+  font-size: 13px; font-weight: 400; margin: 9px 2px 0;
+  line-height: 1.3; color: #e6e6e6;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.tile .sub { margin: 2px; font-size: 11.5px; color: var(--muted); }
+
+.bar { height: 3px; background: #333; border-radius: 2px; overflow: hidden; margin: 7px 2px 0; }
+.bar i { display: block; height: 100%; background: var(--green); transition: width .3s; }
+
+.grid {
+  display: grid; gap: 22px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
+  padding: 6px 28px 20px;
+}
+.filters { display: flex; gap: 8px; padding: 18px 28px 6px; flex-wrap: wrap; }
+.chip {
+  padding: 6px 14px; border-radius: 16px; font-size: 13px;
+  background: var(--raised); border: 1px solid var(--line);
+}
+.chip.on { background: #fff; color: #111; font-weight: 600; border-color: #fff; }
+.chip:hover:not(.on) { background: var(--raised-hover); }
+h2.page { font-size: 26px; margin: 22px 28px 0; font-weight: 600; }
+.empty { color: var(--muted); padding: 60px 28px; text-align: center; }
+.blank {
+  padding: 70px 28px; text-align: center; max-width: 460px; margin: 0 auto;
+}
+.blank h3 { font-size: 18px; font-weight: 600; margin: 0 0 8px; color: var(--text); }
+.blank p { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin: 0 0 20px; }
+@keyframes pulse { 0%, 100% { opacity: .38; } 50% { opacity: .68; } }
+.skel { background: var(--raised); border-radius: 5px; animation: pulse 1.4s ease-in-out infinite; }
+.skel.cover { aspect-ratio: 2 / 3; width: 100%; }
+.skel.line { height: 11px; margin: 9px 2px 0; }
+.skel.line.short { width: 55%; }
+.skel.head { height: 20px; width: 190px; margin: 0 28px 14px; }
+
+/* ---------- detail ---------- */
+#detail { display: none; }
+#detail.show { display: block; }
+#dhero { position: relative; height: 380px; display: flex; align-items: flex-end; }
+#dhero .art { position: absolute; inset: 0; background-size: cover; background-position: center 30%; }
+#dhero .scrim {
+  position: absolute; inset: 0;
+  background:
+    linear-gradient(90deg, var(--bg) 2%, rgba(11,11,11,.8) 38%, rgba(11,11,11,.15) 80%),
+    linear-gradient(0deg, var(--bg) 2%, rgba(11,11,11,0) 45%);
+}
+#dhero .inner { position: relative; padding: 0 28px 30px; max-width: 660px; }
+#dhero h1 { font-size: 40px; margin: 0 0 8px; font-weight: 600; line-height: 1.08; }
+#dhero img.logo {
+  height: 104px; width: auto; max-width: 420px;
+  object-fit: contain; object-position: left bottom;
+  margin-bottom: 12px; display: block;
+}
+#dmeta { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+#dbody { padding: 26px 28px 40px; max-width: 760px; }
+#dbody p { color: #cfcfcf; line-height: 1.6; margin: 0 0 22px; font-size: 14px; }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 18px; }
+.fact dt { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; }
+.fact dd { margin: 5px 0 0; font-size: 14px; }
+#dnote { color: var(--muted); font-size: 13px; margin-top: 12px; min-height: 18px; }
+#dbar { max-width: 420px; }
+
+#crash {
+  position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 90px);
+  display: flex; align-items: center; gap: 14px;
+  max-width: 820px; padding: 13px 16px;
+  background: #241a1a; border: 1px solid #5a3030; border-radius: 7px;
+  box-shadow: 0 10px 34px rgba(0,0,0,.6);
+  transition: transform .22s ease, opacity .22s; opacity: 0;
+  pointer-events: none; z-index: 60;
+}
+#crash.show { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+#crash .grow { flex: 1; min-width: 0; }
+#crash b { display: block; font-size: 14px; }
+#crash span { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+
+#toast {
+  position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 70px);
+  background: var(--raised); border: 1px solid var(--line);
+  padding: 11px 18px; border-radius: 5px; font-size: 13.5px;
+  transition: transform .22s ease, opacity .22s; opacity: 0;
+  box-shadow: 0 8px 26px rgba(0,0,0,.6);
+}
+#toast.show { transform: translate(-50%, 0); opacity: 1; }
 </style>
 </head>
 <body>
 <div id="shell">
-  <aside>
-    <div class="brand"><div class="mark">X</div><b>Xodus</b></div>
-    <div class="find"><input id="q" placeholder="Search"></div>
-    <div class="filters">
-      <div class="chip on" data-f="all">All</div>
-      <div class="chip" data-f="ready">Installed</div>
-      <div class="chip" data-f="owned">Owned</div>
-    </div>
-    <div id="list"></div>
-  </aside>
-  <main>
-    <div id="empty">Pick a game on the left</div>
-    <div id="view" style="display:none">
-      <div id="hero"></div>
-      <div id="head">
-        <img id="logo">
-        <h1 id="title"></h1>
-        <div id="pub"></div>
-        <div id="acts">
-          <button class="go" id="go"></button>
-          <div class="bar" id="bar"><i id="fill"></i></div>
-          <span class="meta" id="meta"></span>
-        </div>
+  <aside id="rail">
+    <button id="account">
+      <span id="avatar">X</span>
+      <span id="who">
+        <span id="gamertag">Checking…</span>
+        <span id="accountnote">Xbox account</span>
+      </span>
+    </button>
+
+    <nav>
+      <button class="nav on" data-view="home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+        Home
+      </button>
+      <button class="nav" data-view="pass">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M6.5 5.5c3 4 8 4 11 0M6.5 18.5c3-4 8-4 11 0"/></svg>
+        Game Pass
+      </button>
+      <button class="nav" data-view="library">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        My library
+      </button>
+    </nav>
+
+    <div class="railhead">Most recent</div>
+    <div id="recent"></div>
+
+    <div id="menu">
+      <div class="head">
+        <span id="menuavatar" class="avatarlike">X</span>
+        <span class="who"><b id="menutag">Checking…</b><span id="menunote"></span></span>
       </div>
-      <div id="desc"></div>
+      <button class="item" id="mset">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1v.3a2 2 0 1 1-4 0v-.2a1.6 1.6 0 0 0-2.8-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H3a2 2 0 1 1 0-4h.2a1.6 1.6 0 0 0 1.1-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 2.7-1.1V3a2 2 0 1 1 4 0v.2a1.6 1.6 0 0 0 2.8 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.3a2 2 0 1 1 0 4h-.2a1.6 1.6 0 0 0-1.5 1z"/></svg>
+        Settings
+      </button>
+      <button class="item" id="mrefresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>
+        Refresh catalogue
+      </button>
+      <hr>
+      <button class="item" id="msign">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 3h4a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1h-4M10 17l-5-5 5-5M5 12h11"/></svg>
+        <span id="msigntext">Sign out</span>
+      </button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <div id="bar">
+      <button id="back" title="Back">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 5l-7 7 7 7"/></svg>
+      </button>
+      <span class="spacer"></span>
+      <label id="searchwrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
+        <input id="search" type="search" placeholder="Search for games" autocomplete="off" spellcheck="false">
+      </label>
+      <span class="spacer"></span>
+      <span id="count"></span>
+    </div>
+
+    <div id="scroll">
+      <div id="pages"></div>
+      <section id="settings" hidden>
+        <h2 class="page">Settings</h2>
+
+        <div class="group">
+          <h3>Account</h3>
+          <div class="card">
+            <span id="setavatar" class="avatarlike">X</span>
+            <span class="grow">
+              <b id="settag">Checking…</b>
+              <p id="setnote">Not signed in.</p>
+            </span>
+            <button class="btn small" id="setsign">Sign in</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>Folders</h3>
+          <div class="field">
+            <label for="fgames">Games folder</label>
+            <input id="fgames" spellcheck="false">
+            <div class="hint">Where downloads are unpacked.</div>
+          </div>
+          <div class="field">
+            <label for="fwine">Wine binary</label>
+            <input id="fwine" spellcheck="false">
+            <div class="hint">The patched Wine build.</div>
+          </div>
+          <div class="field">
+            <label for="fprefix">Wine prefix</label>
+            <input id="fprefix" spellcheck="false">
+          </div>
+          <div class="field">
+            <label for="fmarket">Region</label>
+            <input id="fmarket" spellcheck="false" maxlength="2" style="width:80px">
+            <div class="hint">Two letters.</div>
+          </div>
+          <div class="field">
+            <label for="frepo">Report problems to</label>
+            <input id="frepo" spellcheck="false">
+            <div class="hint">owner/name. Opens a draft issue for you to check first.</div>
+          </div>
+          <div class="row">
+            <button class="btn" id="fsave">Save</button>
+            <button class="btn ghost" id="frevert">Undo changes</button>
+          </div>
+          <div id="saved"></div>
+        </div>
+
+        <div class="group">
+          <h3>Catalogue</h3>
+          <div class="card">
+            <span class="grow">
+              <b id="catcount">—</b>
+              <p id="catwhen"></p>
+            </span>
+            <button class="btn ghost small" id="catrefresh">Refresh</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <h3>About</h3>
+          <div class="card">
+            <span class="grow">
+              <b id="version">Xpedited</b>
+              <p>A fork of <b>Xodus</b>. Not affiliated with Microsoft.</p>
+            </span>
+            <button class="btn ghost small" id="checkupdate">Check for updates</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="detail">
+        <div id="dhero">
+          <div class="art"></div><div class="scrim"></div>
+          <div class="inner">
+            <img class="logo" hidden>
+            <h1></h1>
+            <div id="dmeta"></div>
+            <div class="row">
+              <button class="btn" id="dgo"></button>
+              <button class="btn ghost" id="duninstall" hidden></button>
+              <button class="btn ghost" id="dback">Back</button>
+            </div>
+            <div id="dbar" class="bar" hidden><i style="width:0"></i></div>
+            <div id="dnote"></div>
+          </div>
+        </div>
+        <div id="dbody">
+          <p id="ddesc"></p>
+          <dl class="facts" id="dfacts"></dl>
+        </div>
+      </section>
     </div>
   </main>
 </div>
+<div id="crash">
+  <span class="grow"><b id="crashtitle"></b><span id="crashwhy"></span></span>
+  <button class="btn small" id="crashreport">Report</button>
+  <button class="btn ghost small" id="crashlog">Open log</button>
+  <button class="btn ghost small" id="crashclose">Dismiss</button>
+</div>
+<div id="toast"></div>
 
 <script>
-let GAMES = [], filter = "all", query = "", picked = null;
-const $ = id => document.getElementById(id);
 const send = m => window.ipc.postMessage(JSON.stringify(m));
-const esc = t => (t || "").replace(/[<>&]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c]));
+const $ = s => document.querySelector(s);
+const el = (tag, cls) => { const n = document.createElement(tag); if (cls) n.className = cls; return n; };
 
-function visible() {
-  const q = query.trim().toLowerCase();
-  return GAMES.filter(g =>
-    (filter === "all" || (filter === "ready" && g.installed) || (filter === "owned" && g.source === "owned")) &&
-    (!q || g.title.toLowerCase().includes(q)));
+let GAMES = [];
+let VIEW = "home";
+let FILTER = "all";
+let QUERY = "";
+let OPEN = null;
+let SIGNED_IN = false;
+let LOADED = false;
+const RUNNING = new Set();
+let SETTINGS = null;
+let CRASH = null;
+const PROGRESS = new Map();
+
+const size = bytes => {
+  if (!bytes) return "";
+  const gb = bytes / 1073741824;
+  if (gb >= 1) return gb.toFixed(gb >= 10 ? 0 : 1) + " GB";
+  const mb = bytes / 1048576;
+  if (mb >= 1) return mb.toFixed(mb >= 10 ? 0 : 1) + " MB";
+  return Math.max(1, Math.round(bytes / 1024)) + " kB";
+};
+const rateText = bytes => (bytes > 0 ? size(bytes) + "/s" : "");
+const remaining = (have, total, rate) => {
+  if (!rate || !total || have >= total) return "";
+  const seconds = Math.round((total - have) / rate);
+  if (seconds < 90) return seconds + "s left";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 90) return minutes + " min left";
+  return Math.round(minutes / 60) + " h left";
+};
+/// "142 MB of 2.2 GB - 5.1 MB/s - 6 min left", dropping whatever is unknown.
+const progressLine = p => {
+  if (p.note) return p.note;
+  const parts = [];
+  parts.push(
+    p.total
+      ? `${size(p.have) || "0 MB"} of ${size(p.total)}`
+      : size(p.have) || "Starting…");
+  const r = rateText(p.rate);
+  if (r) parts.push(r);
+  const left = remaining(p.have, p.total, p.rate);
+  if (left) parts.push(left);
+  return parts.join("  ·  ");
+};
+const label = g => {
+  if (RUNNING.has(g.id)) return "Stop";
+  const p = PROGRESS.get(g.id);
+  if (p) return p.percent >= 100 ? "Finishing…" : "Installing " + p.percent + "%";
+  return g.installed ? "Play" : "Install";
+};
+const mainIcon = g => (RUNNING.has(g.id) ? stopIcon : g.installed ? playIcon : downIcon);
+/// The store hands out 720x1080 covers and 4K hero art. Decoded at full size
+/// that is 3 MB and 32 MB of memory each, for pictures drawn a few hundred
+/// pixels wide. The CDN will resize on request, so ask it for what fits.
+const sized = (url, w, h) => {
+  if (!url || !/^https?:/i.test(url)) return url;
+  const join = url.includes("?") ? "&" : "?";
+  return `${url}${join}q=90&w=${w}&h=${h}`;
+};
+const ART = {
+  cover:  [304, 456],   // portrait tile, at 2x
+  square: [336, 336],   // "jump back in" tile, at 2x
+  thumb:  [64, 64],     // the rail
+  promo:  [1200, 560],  // featured card
+  hero:   [1600, 760],  // the wide art behind a heading
+  logo:   [800, 220],   // a wordmark
+};
+const art = (url, kind) => sized(url, ...ART[kind]);
+
+const wordmark = img => img.naturalHeight > 0 && img.naturalWidth / img.naturalHeight >= 1.8;
+const playIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>';
+const downIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg>';
+const stopIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg>';
+const binIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
+
+function toast(text) {
+  const t = $("#toast");
+  t.textContent = text;
+  t.classList.add("show");
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.classList.remove("show"), 2600);
 }
 
-function drawList() {
-  const all = visible();
-  const ready = all.filter(g => g.installed);
-  const rest = all.filter(g => !g.installed);
-  const row = g => `<div class="row ${g.installed ? "" : "off"} ${picked === g.id ? "on" : ""}" onclick="pick('${g.id}')">
-      ${g.cover ? `<img loading="lazy" src="${g.cover}">` : `<img>`}<span>${esc(g.title)}</span></div>`;
-  $("list").innerHTML =
-    (ready.length ? `<div class="sect">Installed — ${ready.length}</div>` + ready.map(row).join("") : "") +
-    (rest.length ? `<div class="sect">Library — ${rest.length}</div>` + rest.map(row).join("") : "");
+/* ---------- tiles ---------- */
+function coverArt(g, box, square) {
+  const src = g.cover || g.logo || g.hero;
+  if (src) {
+    const img = el("img");
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.src = art(src, square ? "square" : "cover");
+    img.alt = "";
+    img.onerror = () => { img.replaceWith(placeholder(g)); };
+    box.appendChild(img);
+  } else {
+    box.appendChild(placeholder(g));
+  }
+}
+function placeholder(g) {
+  const ph = el("div", "ph");
+  ph.textContent = g.title;
+  return ph;
 }
 
-function pick(id) {
+function tile(g, square) {
+  const node = el("button", "tile" + (square ? " sq" : ""));
+  const box = el("div", "cover");
+  coverArt(g, box, square);
+
+  if (RUNNING.has(g.id)) {
+    const b = el("span", "badge playing");
+    b.textContent = "PLAYING";
+    box.appendChild(b);
+  } else if (g.installed) {
+    const b = el("span", "badge installed");
+    b.textContent = "INSTALLED";
+    box.appendChild(b);
+  } else if (g.source === "owned") {
+    const b = el("span", "badge");
+    b.textContent = "OWNED";
+    box.appendChild(b);
+  }
+  node.appendChild(box);
+
+  const title = el("h3");
+  title.textContent = g.title;
+  node.appendChild(title);
+
+  const p = PROGRESS.get(g.id);
+  if (p) {
+    const bar = el("div", "bar");
+    const fill = el("i");
+    fill.style.width = p.percent + "%";
+    bar.appendChild(fill);
+    node.appendChild(bar);
+    const sub = el("div", "sub");
+    sub.textContent = p.note
+      ? p.note
+      : `${size(p.have) || "0 MB"} of ${size(p.total)}` + (p.rate ? "  ·  " + rateText(p.rate) : "");
+    node.appendChild(sub);
+  } else if (g.size) {
+    const sub = el("div", "sub");
+    sub.textContent = size(g.size);
+    node.appendChild(sub);
+  }
+
+  node.onclick = () => open(g.id);
+  return node;
+}
+
+const chevron = dir =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="${
+    dir < 0 ? "M15 5l-7 7 7 7" : "M9 5l7 7-7 7"}"/></svg>`;
+
+function shelf(title, note, games, into, square) {
+  if (!games.length) return;
+  const s = el("section", "shelf");
+  const head = el("div", "shelfhead");
+  const h = el("h2");
+  h.textContent = title;
+  head.appendChild(h);
+  if (note) { const e = el("em"); e.textContent = note; head.appendChild(e); }
+
+  const strip = el("div", "strip");
+  for (const g of games) strip.appendChild(tile(g, square));
+
+  // Only worth offering when there is something off the edge to reach.
+  const arrows = el("div", "arrows");
+  for (const dir of [-1, 1]) {
+    const b = el("button");
+    b.innerHTML = chevron(dir);
+    b.title = dir < 0 ? "Back" : "More";
+    b.onclick = () => strip.scrollBy({ left: dir * (strip.clientWidth - 120), behavior: "smooth" });
+    arrows.appendChild(b);
+  }
+  head.appendChild(arrows);
+  requestAnimationFrame(() => {
+    arrows.style.visibility = strip.scrollWidth > strip.clientWidth + 4 ? "visible" : "hidden";
+  });
+
+  s.appendChild(head);
+  s.appendChild(strip);
+  into.appendChild(s);
+}
+
+/* ---------- views ---------- */
+function heroFor(g, into) {
+  const hero = el("section");
+  hero.id = "hero";
+  const layer = el("div", "art");
+  const backdrop = g.hero || g.cover;
+  if (backdrop) layer.style.backgroundImage = `url("${art(backdrop, "hero")}")`;
+  hero.appendChild(layer);
+  hero.appendChild(el("div", "scrim"));
+
+  const inner = el("div", "inner");
+  const kicker = el("div", "kicker");
+  kicker.textContent = RUNNING.has(g.id) ? "Playing now"
+    : g.installed ? "Ready to play"
+    : g.source === "owned" ? "In your library" : "With Game Pass";
+  inner.appendChild(kicker);
+
+  const h1 = el("h1");
+  h1.textContent = g.title;
+  if (g.logo) {
+    const logo = el("img", "logo");
+    logo.src = art(g.logo, "logo");
+    // Keep the slot: swapping in the title would shift everything below it.
+    logo.onerror = () => logo.replaceWith(h1);
+    // The store's "logo" is often just the box art again, which reads as a
+    // stray thumbnail up here. Only a wide wordmark earns the space.
+    logo.onload = () => { if (!wordmark(logo)) logo.replaceWith(h1); };
+    inner.appendChild(logo);
+  } else {
+    inner.appendChild(h1);
+  }
+
+  if (g.description) {
+    const p = el("p");
+    p.textContent = g.description;
+    inner.appendChild(p);
+  }
+
+  const row = el("div", "row");
+  const go = el("button", "btn");
+  go.innerHTML = mainIcon(g) + "<span>" + label(g) + "</span>";
+  go.onclick = e => { e.stopPropagation(); act(g); };
+  row.appendChild(go);
+  const more = el("button", "btn ghost");
+  more.textContent = "See details";
+  more.onclick = () => open(g.id);
+  row.appendChild(more);
+  inner.appendChild(row);
+
+  hero.appendChild(inner);
+  into.appendChild(hero);
+}
+
+function promo(g, short) {
+  const card = el("button", "promo" + (short ? " short" : ""));
+  const src = g.hero || g.cover;
+  if (src) {
+    const img = el("img");
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.src = art(src, "promo");
+    img.alt = "";
+    img.onerror = () => img.remove();
+    card.appendChild(img);
+  }
+  card.appendChild(el("div", "veil"));
+  const copy = el("div", "copy");
+  const b = el("b");
+  b.textContent = g.title;
+  copy.appendChild(b);
+  const sub = el("span");
+  sub.textContent = g.installed ? "Installed - ready to play"
+    : g.source === "owned" ? "In your library" : "Play with Game Pass";
+  copy.appendChild(sub);
+  card.appendChild(copy);
+  card.onclick = () => open(g.id);
+  return card;
+}
+
+function drawHome(into) {
+  const installed = GAMES.filter(g => g.installed);
+  const owned = GAMES.filter(g => g.source === "owned" && !g.installed);
+  const pass = GAMES.filter(g => g.source !== "owned" && !g.installed);
+
+  if (installed.length) {
+    shelf("Jump back in", "", installed, into, true);
+  } else if (GAMES.length) {
+    const feature = owned[0] || pass[0];
+    if (feature) heroFor(feature, into);
+  }
+
+  // Four cards with art big enough to be worth showing, the way the
+  // real app opens: two tall, two short.
+  const arty = pass.filter(g => g.hero);
+  if (arty.length >= 4) {
+    const head = el("div", "shelfhead");
+    const h = el("h2");
+    h.textContent = "Featured";
+    head.appendChild(h);
+    into.appendChild(head);
+    const grid = el("div", "promos");
+    const picks = rotate(arty, 4);
+    grid.appendChild(promo(picks[0], false));
+    grid.appendChild(promo(picks[1], false));
+    grid.appendChild(promo(picks[2], true));
+    grid.appendChild(promo(picks[3], true));
+    into.appendChild(grid);
+  }
+
+  shelf("In your library", "bought on your account", owned, into);
+  shelf("Included with Game Pass", pass.length + " games", pass.slice(0, 40), into);
+}
+
+/// A different handful each day, so the front page is not the same four
+/// games forever, but does not reshuffle while you are looking at it.
+/// The picks are spread across the whole list rather than taken in a run,
+/// or they all come from one corner of the alphabet.
+function rotate(list, count) {
+  const day = Math.floor(Date.now() / 86400000);
+  const stride = Math.max(1, Math.floor(list.length / count));
+  const out = [];
+  for (let i = 0; i < count; i++) out.push(list[(day + i * stride) % list.length]);
+  return out;
+}
+
+/// The catalogue is over five hundred games. Building every tile up front
+/// costs a slow first paint, and scrolling past them all would leave the
+/// decoded cover of each one in memory. Hand them out a page at a time.
+const PAGE = 60;
+
+function drawGrid(games, into) {
+  if (!games.length) {
+    const e = el("div", "empty");
+    e.textContent = QUERY ? `Nothing matches “${QUERY}”.` : "Nothing here yet.";
+    into.appendChild(e);
+    return;
+  }
+  const grid = el("div", "grid");
+  into.appendChild(grid);
+
+  let shown = 0;
+  const more = () => {
+    const next = games.slice(shown, shown + PAGE);
+    for (const g of next) grid.appendChild(tile(g));
+    shown += next.length;
+    if (shown >= games.length) {
+      watcher.disconnect();
+      sentinel.remove();
+    }
+  };
+
+  // A marker below the grid: when it comes into view, add the next page.
+  const sentinel = el("div");
+  sentinel.style.height = "1px";
+  into.appendChild(sentinel);
+  const watcher = new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting)) more();
+  }, { root: $("#scroll"), rootMargin: "600px" });
+  watcher.observe(sentinel);
+
+  more();
+  // Whatever built this grid is about to be thrown away by the next draw().
+  drawGrid.watcher?.disconnect();
+  drawGrid.watcher = watcher;
+}
+
+function filtered() {
+  let games = GAMES;
+  if (VIEW === "pass") games = games.filter(g => g.source !== "owned");
+  if (VIEW === "library") {
+    if (FILTER === "installed") games = games.filter(g => g.installed);
+    else if (FILTER === "owned") games = games.filter(g => g.source === "owned");
+    else if (FILTER === "pass") games = games.filter(g => g.source !== "owned");
+  }
+  if (QUERY) {
+    const q = QUERY.toLowerCase();
+    games = games.filter(g =>
+      g.title.toLowerCase().includes(q) || (g.publisher || "").toLowerCase().includes(q));
+  }
+  return games;
+}
+
+function skeleton(into) {
+  into.appendChild(el("div", "skel head"));
+  const grid = el("div", "grid");
+  for (let i = 0; i < 12; i++) {
+    const t = el("div");
+    t.appendChild(el("div", "skel cover"));
+    t.appendChild(el("div", "skel line"));
+    t.appendChild(el("div", "skel line short"));
+    grid.appendChild(t);
+  }
+  into.appendChild(grid);
+}
+
+function blank(into, heading, body, action, onAction) {
+  const box = el("div", "blank");
+  const h = el("h3");
+  h.textContent = heading;
+  box.appendChild(h);
+  const p = el("p");
+  p.textContent = body;
+  box.appendChild(p);
+  if (action) {
+    const b = el("button", "btn");
+    b.textContent = action;
+    b.onclick = onAction;
+    box.appendChild(b);
+  }
+  into.appendChild(box);
+}
+
+function draw() {
+  const pages = $("#pages");
+  pages.textContent = "";
+  const onSettings = VIEW === "settings" && !OPEN;
+  $("#settings").hidden = !onSettings;
+  $("#detail").classList.toggle("show", !!OPEN);
+  pages.hidden = !!OPEN || onSettings;
+  $("#back").classList.toggle("show", !!OPEN || onSettings);
+  $("#count").textContent = "";
+  if (OPEN) return;
+  if (onSettings) { drawRail(); return; }
+
+  // Nothing to show yet is not the same as nothing to show.
+  if (!GAMES.length) {
+    if (!LOADED) {
+      skeleton(pages);
+    } else if (!SIGNED_IN) {
+      blank(pages, "Sign in to see your games",
+        "Sign in to see what you own and what Game Pass includes.",
+        "Sign in", signToggle);
+    } else {
+      blank(pages, "No games found",
+        "Could not reach the store.",
+        "Try again", () => send({ kind: "refresh" }));
+    }
+    $("#count").textContent = "";
+    drawRail();
+    return;
+  }
+
+  const games = filtered();
+  if (QUERY) {
+    const h = el("h2", "page");
+    h.textContent = `Results for “${QUERY}”`;
+    pages.appendChild(h);
+    drawGrid(games, pages);
+  } else if (VIEW === "home") {
+    drawHome(pages);
+  } else if (VIEW === "pass") {
+    const h = el("h2", "page");
+    h.textContent = "Game Pass";
+    pages.appendChild(h);
+    drawGrid(games, pages);
+  } else {
+    const h = el("h2", "page");
+    h.textContent = "My library";
+    pages.appendChild(h);
+    const chips = el("div", "filters");
+    for (const [key, text] of [["all", "All"], ["installed", "Installed"], ["owned", "Owned"], ["pass", "Game Pass"]]) {
+      const c = el("button", "chip" + (FILTER === key ? " on" : ""));
+      c.textContent = text;
+      c.onclick = () => { FILTER = key; draw(); };
+      chips.appendChild(c);
+    }
+    pages.appendChild(chips);
+    drawGrid(games, pages);
+  }
+  if (draw.top) { $("#scroll").scrollTop = 0; draw.top = false; }
+  $("#count").textContent = !LOADED
+    ? "Loading…"
+    : games.length + " of " + GAMES.length + " games";
+  drawRail();
+}
+
+function drawRail() {
+  const rail = $("#recent");
+  rail.textContent = "";
+  const installed = GAMES.filter(g => g.installed || PROGRESS.has(g.id));
+  if (!installed.length) {
+    const e = el("div", "empty");
+    e.style.padding = "8px 22px";
+    e.style.fontSize = "12.5px";
+    e.style.textAlign = "left";
+    e.textContent = LOADED ? "No games installed yet." : "Loading…";
+    rail.appendChild(e);
+    return;
+  }
+  for (const g of installed) {
+    const b = el("button", "recent");
+    const src = g.logo || g.cover;
+    if (src) {
+      const img = el("img");
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.src = art(src, "thumb");
+      img.onerror = () => img.replaceWith(el("span", "ph"));
+      b.appendChild(img);
+    } else {
+      b.appendChild(el("span", "ph"));
+    }
+    const s = el("span");
+    const title = el("span", "line");
+    title.textContent = g.title;
+    s.appendChild(title);
+    const p = PROGRESS.get(g.id);
+    const note = el("span", "note");
+    note.textContent = RUNNING.has(g.id)
+      ? "Playing"
+      : p
+        ? (p.note ? p.note : `${p.percent}%  ·  ${size(p.have)}`)
+        : size(g.size) || "Installed";
+    s.appendChild(note);
+    b.appendChild(s);
+    b.onclick = () => open(g.id);
+    rail.appendChild(b);
+  }
+}
+
+/* ---------- detail ---------- */
+function open(id) {
+  OPEN = id;
   const g = GAMES.find(x => x.id === id);
   if (!g) return;
-  picked = id;
-  $("empty").style.display = "none";
-  $("view").style.display = "block";
-  $("hero").style.backgroundImage = g.hero ? `url(${g.hero})` : "none";
-  const logo = $("logo");
-  if (g.logo) { logo.src = g.logo; logo.style.display = "block"; } else { logo.style.display = "none"; }
-  $("title").innerHTML = esc(g.title) + (g.source === "owned" ? `<span class="tagline">Owned</span>` : `<span class="tagline">Game Pass</span>`);
-  $("pub").textContent = g.publisher || "";
-  $("desc").textContent = g.description || "";
-  $("meta").textContent = g.size ? (g.size / 1e9).toFixed(1) + " GB" : "";
-  $("bar").classList.remove("on");
-  action(g);
-  drawList();
-}
 
-function action(g) {
-  const b = $("go");
-  b.disabled = false;
-  b.textContent = g.installed ? "Play" : "Install";
-  b.onclick = () => {
-    send({ kind: g.installed ? "play" : "install", id: g.id });
-    b.disabled = true;
-    b.textContent = g.installed ? "Starting…" : "Installing…";
-    if (!g.installed) $("bar").classList.add("on");
+  const backdrop = g.hero || g.cover;
+  $("#dhero .art").style.backgroundImage = backdrop ? `url("${art(backdrop, "hero")}")` : "none";
+  const logo = $("#dhero img.logo");
+  const heading = $("#dhero h1");
+  heading.textContent = g.title;
+  if (g.logo) {
+    logo.hidden = false;
+    heading.hidden = true;
+    logo.onerror = () => { logo.hidden = true; heading.hidden = false; };
+    logo.onload = () => {
+      const wide = wordmark(logo);
+      logo.hidden = !wide;
+      heading.hidden = wide;
+    };
+    logo.src = art(g.logo, "logo");
+  } else {
+    logo.hidden = true;
+    heading.hidden = false;
+  }
+  $("#dmeta").textContent = [g.publisher, size(g.size),
+    g.installed ? "Installed" : g.source === "owned" ? "Owned" : "Game Pass"]
+    .filter(Boolean).join("  •  ");
+  $("#ddesc").textContent = g.description || "";
+
+  const facts = $("#dfacts");
+  facts.textContent = "";
+  for (const [k, v] of [["Publisher", g.publisher], ["Download size", size(g.size)],
+                        ["Store id", g.id], ["Status", g.installed ? "Installed" : "Not installed"]]) {
+    if (!v) continue;
+    const d = el("div", "fact");
+    const dt = el("dt"); dt.textContent = k;
+    const dd = el("dd"); dd.textContent = v;
+    d.append(dt, dd);
+    facts.appendChild(d);
+  }
+
+  const go = $("#dgo");
+  go.innerHTML = mainIcon(g) + "<span>" + label(g) + "</span>";
+  go.disabled = PROGRESS.has(g.id);
+  go.onclick = () => act(g);
+
+  // Removing a game deletes gigabytes, so the button asks once before it
+  // does anything. It disarms itself if left alone.
+  const bin = $("#duninstall");
+  bin.hidden = !g.installed || PROGRESS.has(g.id) || RUNNING.has(g.id);
+  bin.disabled = false;
+  bin.className = "btn ghost";
+  bin.innerHTML = binIcon + "<span>Uninstall</span>";
+  let armed = null;
+  bin.onclick = () => {
+    if (!armed) {
+      bin.className = "btn danger";
+      bin.innerHTML = binIcon + `<span>Remove ${size(g.size)}?</span>`;
+      armed = setTimeout(() => {
+        armed = null;
+        bin.className = "btn ghost";
+        bin.innerHTML = binIcon + "<span>Uninstall</span>";
+      }, 6000);
+      return;
+    }
+    clearTimeout(armed);
+    armed = null;
+    bin.disabled = true;
+    bin.innerHTML = binIcon + "<span>Removing…</span>";
+    send({ kind: "uninstall", id: g.id });
   };
+
+  const p = PROGRESS.get(g.id);
+  $("#dbar").hidden = !p;
+  if (p) { $("#dbar i").style.width = p.percent + "%"; $("#dnote").textContent = progressLine(p); }
+  else $("#dnote").textContent = "";
+
+  $("#scroll").scrollTop = 0;
+  draw();
 }
 
-// from Rust
-function xodusCatalogue(json) { GAMES = json; drawList(); if (picked) pick(picked); }
-function xodusProgress(id, pct, note) {
-  if (picked === id) { $("fill").style.width = pct + "%"; if (note) $("meta").textContent = note; }
+function act(g) {
+  if (RUNNING.has(g.id)) {
+    toast("Closing " + g.title);
+    send({ kind: "stop", id: g.id });
+    return;
+  }
+  if (PROGRESS.has(g.id)) return;
+  if (!g.installed) {
+    PROGRESS.set(g.id, { percent: 0, have: 0, total: g.size, rate: 0, note: "Starting…" });
+    toast("Installing " + g.title);
+  } else {
+    toast("Starting " + g.title);
+  }
+  send({ kind: g.installed ? "play" : "install", id: g.id });
+  if (OPEN === g.id) open(g.id); else draw();
+}
+
+/* ---------- account menu ---------- */
+function menu(show) {
+  $("#menu").classList.toggle("show", show === undefined ? !$("#menu").classList.contains("show") : show);
+}
+function showSettings() {
+  menu(false);
+  VIEW = "settings";
+  for (const b of document.querySelectorAll(".nav")) b.classList.remove("on");
+  OPEN = null;
+  draw.top = true;
+  draw();
+}
+function fillSettings() {
+  if (!SETTINGS) return;
+  $("#fgames").value = SETTINGS.games_dir || "";
+  $("#fwine").value = SETTINGS.wine || "";
+  $("#fprefix").value = SETTINGS.prefix || "";
+  $("#fmarket").value = SETTINGS.market || "";
+  $("#frepo").value = SETTINGS.report_repo || "";
+  $("#catcount").textContent = (SETTINGS.catalogue || 0) + " games";
+  if (SETTINGS.version) $("#version").textContent = "Xpedited " + SETTINGS.version;
+  $("#catwhen").textContent = "Last refreshed " + (SETTINGS.refreshed || "never") + ".";
+}
+
+/* ---------- from the host ---------- */
+function xodusAccount(gamertag, signedIn) {
+  SIGNED_IN = signedIn;
+  const initial = signedIn && gamertag ? gamertag.trim()[0].toUpperCase() : "X";
+  $("#gamertag").textContent = gamertag;
+  $("#accountnote").textContent = signedIn ? "Xbox account" : "Not signed in";
+  $("#avatar").textContent = initial;
+  $("#menuavatar").textContent = initial;
+  $("#menutag").textContent = gamertag;
+  $("#menunote").textContent = signedIn ? "Signed in" : "Not signed in";
+  $("#msigntext").textContent = signedIn ? "Sign out" : "Sign in";
+  $("#setavatar").textContent = initial;
+  $("#settag").textContent = signedIn ? gamertag : "Not signed in";
+  $("#setsign").textContent = signedIn ? "Sign out" : "Sign in";
+  $("#setnote").textContent = signedIn
+    ? "Signed in."
+    : "Sign in to see your games.";
+}
+function xodusSettings(values) {
+  SETTINGS = values;
+  fillSettings();
+}
+function xodusRunning(id, running) {
+  if (running) RUNNING.add(id); else RUNNING.delete(id);
+  if (OPEN === id) open(id); else draw();
+}
+function crashBanner(show) {
+  $("#crash").classList.toggle("show", show);
+}
+function xodusCrashed(id, title, reason) {
+  CRASH = { id, title, reason };
+  $("#crashtitle").textContent = title;
+  $("#crashwhy").textContent = reason;
+  crashBanner(true);
+  if (OPEN === id) open(id); else draw();
+}
+function xodusLoaded() {
+  LOADED = true;
+  if (OPEN) open(OPEN); else draw();
+}
+function xodusStatus(text) {
+  toast(text);
+  $("#saved").textContent = text;
+}
+function xodusCatalogue(json) {
+  const first = GAMES.length === 0;
+  GAMES = json;
+  if (json.length) LOADED = true;
+  if (first) draw.top = true;
+  if (OPEN) open(OPEN); else draw();
+}
+function xodusProgress(id, percent, have, total, rate, note) {
+  const p = { percent, have, total, rate, note };
+  PROGRESS.set(id, p);
+  const g = GAMES.find(x => x.id === id);
+  if (OPEN === id) {
+    $("#dbar").hidden = false;
+    $("#dbar i").style.width = percent + "%";
+    $("#dnote").textContent = progressLine(p);
+    $("#dgo").innerHTML = downIcon + "<span>" + (g ? label(g) : percent + "%") + "</span>";
+    $("#dgo").disabled = true;
+  } else {
+    draw();
+  }
 }
 function xodusInstalled(id) {
+  PROGRESS.delete(id);
+  RUNNING.delete(id);
   const g = GAMES.find(x => x.id === id);
-  if (!g) return;
-  g.installed = true;
-  drawList();
-  if (picked === id) { $("bar").classList.remove("on"); action(g); }
+  if (g) { g.installed = true; toast(g.title + " is ready to play"); }
+  if (OPEN === id) open(id); else draw();
 }
 
-$("q").addEventListener("input", e => { query = e.target.value; drawList(); });
-document.querySelectorAll(".chip").forEach(c => c.addEventListener("click", () => {
-  document.querySelectorAll(".chip").forEach(x => x.classList.remove("on"));
-  c.classList.add("on"); filter = c.dataset.f; drawList();
-}));
+/* ---------- wiring ---------- */
+for (const b of document.querySelectorAll(".nav")) {
+  b.onclick = () => {
+    for (const other of document.querySelectorAll(".nav")) other.classList.toggle("on", other === b);
+    VIEW = b.dataset.view;
+    OPEN = null;
+    draw.top = true;
+    draw();
+  };
+}
+const signToggle = () => {
+  menu(false);
+  toast(SIGNED_IN ? "Signing out…" : "Opening sign in…");
+  send({ kind: SIGNED_IN ? "signout" : "signin" });
+};
+$("#crashreport").onclick = () => {
+  if (!CRASH) return;
+  toast("Opening a draft issue…");
+  send({ kind: "report", id: CRASH.id });
+  crashBanner(false);
+};
+$("#crashlog").onclick = () => CRASH && send({ kind: "openlog", id: CRASH.id });
+$("#crashclose").onclick = () => crashBanner(false);
+$("#account").onclick = e => { e.stopPropagation(); menu(); };
+$("#mset").onclick = showSettings;
+$("#msign").onclick = signToggle;
+$("#setsign").onclick = signToggle;
+$("#mrefresh").onclick = () => { menu(false); toast("Refreshing…"); send({ kind: "refresh" }); };
+$("#checkupdate").onclick = () => { $("#saved").textContent = "Checking\u2026"; send({ kind: "checkupdate" }); };
+$("#catrefresh").onclick = () => { $("#saved").textContent = "Refreshing…"; send({ kind: "refresh" }); };
+$("#fsave").onclick = () => {
+  send({
+    kind: "savesettings",
+    games_dir: $("#fgames").value.trim(),
+    wine: $("#fwine").value.trim(),
+    prefix: $("#fprefix").value.trim(),
+    market: ($("#fmarket").value.trim() || "US").toUpperCase(),
+    report_repo: $("#frepo").value.trim(),
+  });
+};
+$("#frevert").onclick = () => { fillSettings(); $("#saved").textContent = ""; };
+document.addEventListener("click", () => menu(false));
+$("#menu").onclick = e => e.stopPropagation();
+
+$("#back").onclick = () => {
+  if (VIEW === "settings" && !OPEN) {
+    VIEW = "home";
+    document.querySelector('.nav[data-view="home"]').classList.add("on");
+  }
+  OPEN = null;
+  draw();
+};
+$("#dback").onclick = () => { OPEN = null; draw(); };
+$("#search").oninput = e => {
+  QUERY = e.target.value.trim();
+  OPEN = null;
+  draw.top = true;
+  draw();
+};
+$("#scroll").onscroll = e => $("#bar").classList.toggle("scrolled", e.target.scrollTop > 8);
+document.onkeydown = e => {
+  if (e.key === "Escape") {
+    if ($("#crash").classList.contains("show")) crashBanner(false);
+    else if ($("#menu").classList.contains("show")) menu(false);
+    else if (OPEN) { OPEN = null; draw(); }
+    else if (VIEW === "settings") $("#back").click();
+    else if (QUERY) { $("#search").value = ""; QUERY = ""; draw(); }
+  }
+  if (e.key === "/" && document.activeElement !== $("#search")) { e.preventDefault(); $("#search").focus(); }
+};
+
+draw();
 send({ kind: "ready" });
 </script>
 </body>

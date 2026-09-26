@@ -1,14 +1,14 @@
-<p align="center"><img width="128" src="assets/Icon/Icon.ico" /></p>
-<h1 align="center">Xodus</h1>
-<p align="center">The great gaming migration to Linux</p>
+<p align="center"><img width="128" src="assets/xpedited.png" /></p>
+<h1 align="center">Xpedited</h1>
+<p align="center">A fork of <a href="https://github.com/xodus-gaming/xodus">Xodus</a> - the great gaming migration to Linux</p>
 <p align="center">
     <a href="https://discord.gg/ZG774FK4tq">
-        <img src="https://img.shields.io/discord/1123890623586504714?logo=discord&style=for-the-badge&color=red&label=Game+Launchers+Reverse+Engineering" alt="Discord" />
+        <img src="https://img.shields.io/discord/1123890623586504714?logo=discord&style=for-the-badge&color=red&label=Upstream+Discord" alt="Upstream Discord" />
     </a>
 </p>
 
 > [!IMPORTANT]
-> **This is a fork. The original project is [Xodus](https://github.com/xodus-gaming/xodus) and all credit belongs there.**
+> **Xpedited is a fork. The original project is [Xodus](https://github.com/xodus-gaming/xodus) and all credit belongs there.**
 > The changes in this fork are LLM-assisted, which upstream does not accept, so it stays downstream and
 > nothing here should be sent to them. See [FORK.md](FORK.md) for why, and please go and support the
 > original project rather than this copy of it.
@@ -16,7 +16,94 @@
 > [!CAUTION]
 > This is an unofficial project - use at your own risk. It is not affiliated with, endorsed by, or sponsored by Microsoft or XBOX; all trademarks, product names, and company names or logos mentioned herein are the property of their respective owners.
 
-## Current state of the project
+## What this fork adds
+
+Upstream Xodus is the engine: it signs in, downloads MSIXVC packages, handles
+licences and decrypts executables. Xpedited keeps all of that and adds the
+parts you touch.
+
+- **A desktop app.** One window to browse the PC Game Pass catalogue, see what
+  you own, install a game and play it. Sign in, settings, install progress,
+  stop a running game, uninstall.
+- **Crash reports.** When a game fails, the app keeps the log, works out why in
+  one line, and can open a pre-filled GitHub issue. Paths, gamertag, XUID,
+  tokens and email addresses are redacted first, and you see the report before
+  it goes anywhere.
+- **Xbox Game Services in Wine.** `XGameSave`, `XAsync`/`XTaskQueue`, `XUser`,
+  `XPackage`, `XStore`, `XSystem`, `XNetworking`.
+- **Exports to other launchers.** `xpedited heroic`, `heroic-catalog` and
+  `steam` add the games with their store art; `steam --remove` takes them out.
+- **Self-update.** `xpedited update` checks GitHub releases and replaces the
+  binary in place.
+
+### How well does it work
+
+Of **126 PC Game Pass titles** tested end to end — downloaded, launched,
+screenshotted, then checked by eye — **71 of the 120 that could be downloaded
+started and drew themselves**. The other 6 are not distributed as MSIXVC (UWP
+only, or delisted) and cannot be installed at all.
+
+Every result is a screenshot, not an exit code: a game that shows an error
+dialog still has a live process and would otherwise count as a pass.
+
+Fixes that came out of that run:
+
+| Problem | Fix |
+|---|---|
+| `E_NO_TASK_QUEUE` — Xbox Live never started in any title | Create the default process task queue on demand |
+| Classic games showing "Launcher Error: CreateProcess" | Start the real game binary instead of the launcher stub |
+| Games looking for data at `.` | Start the game in its own folder, as Windows does |
+| Missing VC++ 2022 / .NET Desktop 8 | Install them into the prefix |
+| Wine faulting in `ntdll/path.c` | Guard a null `Name.Buffer` from `NtQueryObject` |
+| Downloads panicking mid-stream | Cache length now counts only flushed bytes |
+
+### Not working yet
+
+- **Multiplayer, achievements and presence.** `XUserGetTokenAndSignature` now
+  mints a token for the service being called, but requests are unsigned.
+- **A black-screen group.** ~19 titles run and draw nothing. Confirmed on a real
+  display, not a test artifact, and inconsistent run to run.
+- **Direct3D 12 / shader model 6.** vkd3d does not expose SM6, so some titles
+  refuse to start and Godot 4's D3D12 shaders crash its DXIL parser.
+- **MSIXVC2 packages**, same as upstream.
+
+## Installing
+
+You need a patched Wine build with the `xgameruntime` work in it, and Rust.
+
+```sh
+git clone <this repo> xpedited && cd xpedited
+./install.sh
+```
+
+That builds the binary, puts it in `~/.local/bin`, and adds a menu entry and
+icon. Start it once with the path to your patched Wine, which is remembered in
+`~/.config/xpedited/settings.json`:
+
+```sh
+xpedited app /path/to/patched/wine
+```
+
+After that `xpedited app` on its own is enough. `./uninstall.sh` reverses it.
+
+## Using the app
+
+Sign in from the account button; the Microsoft login opens in its own window.
+Click a game to install it, and the same button plays it. Behind the account
+button are settings for the games folder, Wine binary, prefix, region and the
+repository crash reports are sent to.
+
+## Privacy
+
+- Your account lives in the system keyring, never in a file in this repo.
+- The service socket is owner-only.
+- Crash reports redact your home directory, username, gamertag, XUID, anything
+  that looks like a token, and email addresses — and are shown to you as a
+  draft GitHub issue before anything is sent.
+
+## Upstream's state of the project
+
+The section below is from Xodus and describes the engine this fork is built on.
 
 The project can now login, download packages and obtain licenses for games.
 
@@ -56,7 +143,7 @@ The project structure is as follows.
 .
 ├── msixvc - [rlib] common rlib crate for utilities for parsing MSIXVC and XSP files
 ├── xodus - [rlib] common rlib crate that contains core xodus functionality, API calls abstractions and utilities
-├── xodus-cli - [bin] CLI currently used for iterating over new xodus features
+├── xodus-cli - [bin] the CLI and the app; builds the `xpedited` binary
 └── xodus-service - [bin] service process exposing a xodus.sock for IPC communication, it takes care of xgameruntime.dll integration.
 ```
 
@@ -89,7 +176,7 @@ Running xodus-service in debug
 cargo run --bin xodus-service
 ```
 
-Debug and profile `xodus-cli` or `xodus-service` with [tokio-console]([tokio-console](https://github.com/tokio-rs/console))
+Debug and profile `xpedited` or `xodus-service` with [tokio-console]([tokio-console](https://github.com/tokio-rs/console))
 
 ```
 RUSTFLAGS="--cfg tokio_unstable" cargo run --features tokio_console 
@@ -106,17 +193,30 @@ RUSTFLAGS="--cfg tokio_unstable" cargo run --features tokio_console
 ### CLI Usage
 
 ```
-Usage: xodus-cli <COMMAND>
+Xbox Store and Game Pass games on Linux. A fork of Xodus.
+
+Usage: xpedited <COMMAND>
 
 Commands:
-  download    Download msixvc or xsp files fo given game
-  license     Dump CIKs for use with XvdTool
-  extract     Extract locally stored msixvc file
-  login       
-  streaming   Download and extract the game through streaming algorithm
-  clep        Generate or decrypt base64-encoded CLEP challenge data
-  sp-license  Decode SPLicenseBlock
-  help        Print this message or the help of the given subcommand(s)
+  download        Download msixvc or xsp files fo given game
+  license         Dump CIKs for use with XvdTool
+  extract         Extract locally stored msixvc file
+  extract-eappx   Extract a locally stored EAppx/EMSIX package (research task, see issue #91)
+  library         List games on your account
+  app             Open the Xpedited window: browse, install and play
+  steam           Add the games you have downloaded to Steam, with their store art
+  heroic-sync     Re-sort Heroic's Xbox categories by what is actually downloaded
+  heroic-catalog  Put the whole PC Game Pass catalogue in the Heroic library
+  heroic          Add an extracted game to the Heroic Games Launcher library
+  metadata        Show a product's title, description and store art
+  update          Check for a newer version and install it
+  login           Sign in to your Microsoft account
+  logout          Forget the signed in account
+  streaming       Download and extract the game through streaming algorithm
+  run             Run a Game with xodus wine
+  clep            Generate or decrypt base64-encoded CLEP challenge data
+  sp-license      Decode SPLicenseBlock
+  help            Print this message or the help of the given subcommand(s)
 
 Options:
   -h, --help     Print help

@@ -7,9 +7,12 @@ use tracing_subscriber::util::SubscriberInitExt;
 use xodus::tokens::TokenManager;
 
 mod commands;
+mod crashreport;
 mod gameconfig;
 mod license;
 mod package;
+mod settings;
+mod update;
 mod webview;
 
 #[derive(Subcommand)]
@@ -64,9 +67,10 @@ enum SubCommand {
         all: bool,
     },
     #[cfg(unix)]
-    #[command(about = "Open the Xodus window: browse, install and play")]
+    #[command(about = "Open the Xpedited window: browse, install and play")]
     App {
-        wine: String,
+        #[arg(help = "Wine binary; remembered in the settings file after the first run")]
+        wine: Option<String>,
         #[arg(long, help = "Where downloaded games live")]
         games_dir: Option<String>,
         #[arg(short, long)]
@@ -97,6 +101,12 @@ enum SubCommand {
             help = "Write even though Steam is running"
         )]
         force: bool,
+        #[arg(
+            long,
+            default_value_t = false,
+            help = "Take our games back out of Steam instead of adding them"
+        )]
+        remove: bool,
         #[arg(
             long,
             default_value_t = false,
@@ -172,7 +182,14 @@ enum SubCommand {
         #[arg(long, default_value_t = false, help = "Emit JSON for other launchers")]
         json: bool,
     },
+    #[command(about = "Check for a newer version and install it")]
+    Update {
+        #[arg(long, default_value_t = false, help = "Only report, do not install")]
+        check: bool,
+    },
+    #[command(about = "Sign in to your Microsoft account")]
     Login,
+    #[command(about = "Forget the signed in account")]
     Logout {
         #[arg(long, default_value_t = false, help = "Remove device license")]
         device: bool,
@@ -238,7 +255,12 @@ enum ClepAction {
 }
 
 #[derive(Parser)]
-#[command(version, about, long_about = None)]
+#[command(
+    name = "xpedited",
+    version,
+    about = "Xbox Store and Game Pass games on Linux. A fork of Xodus.",
+    long_about = None
+)]
 struct CliArgs {
     #[command(subcommand)]
     command: SubCommand,
@@ -284,7 +306,7 @@ async fn main() -> ExitCode {
         registry.init();
     }
     let client = reqwest::ClientBuilder::new()
-        .user_agent(format!("xodus-cli/{}", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!("xpedited/{}", env!("CARGO_PKG_VERSION")))
         .connection_verbose(true)
         .build()
         .unwrap();
@@ -338,6 +360,38 @@ async fn main() -> ExitCode {
             market,
             json,
         } => commands::metadata::run(&client, product, market, json).await,
+        SubCommand::Update { check } => {
+            let repo = settings::load().report_repo;
+            match update::check(&client, &repo).await {
+                Err(err) => {
+                    eprintln!("could not check for updates: {err}");
+                    ExitCode::FAILURE
+                }
+                Ok(None) => {
+                    println!("xpedited {} is the newest build", env!("CARGO_PKG_VERSION"));
+                    ExitCode::SUCCESS
+                }
+                Ok(Some(available)) => {
+                    println!("{} is available (you have {})", available.version, env!("CARGO_PKG_VERSION"));
+                    if !available.notes.trim().is_empty() {
+                        println!("\n{}\n", available.notes.trim());
+                    }
+                    if check {
+                        return ExitCode::SUCCESS;
+                    }
+                    match update::install(&client, &available).await {
+                        Ok(path) => {
+                            println!("installed to {}", path.display());
+                            ExitCode::SUCCESS
+                        }
+                        Err(err) => {
+                            eprintln!("could not install: {err}");
+                            ExitCode::FAILURE
+                        }
+                    }
+                }
+            }
+        }
         #[cfg(unix)]
         SubCommand::App {
             wine,
@@ -345,7 +399,7 @@ async fn main() -> ExitCode {
             market,
             prefix,
             refresh,
-        } => commands::app::run(&client, &tokens, wine, games_dir, market, prefix, refresh).await,
+        } => commands::app::run(&tokens, wine, games_dir, market, prefix, refresh).await,
         #[cfg(unix)]
         SubCommand::Steam {
             wine,
@@ -354,10 +408,11 @@ async fn main() -> ExitCode {
             prefix,
             userdata,
             force,
+            remove,
             dry_run,
         } => {
             commands::steam::run(
-                &client, wine, games_dir, market, prefix, userdata, force, dry_run,
+                &client, wine, games_dir, market, prefix, userdata, force, remove, dry_run,
             )
             .await
         }

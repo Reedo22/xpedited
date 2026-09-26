@@ -247,10 +247,21 @@ where
     let cache_path = out.join(".xodus-streaming-tmp.msixvc");
     let final_path = out.join(".xodus-streaming.msixvc");
 
-    let mut remote_file = streaming::PrefixCacheFile::new(reader, l, cache_path.clone())
-        .await
-        .expect("no err");
-    let remote_xvd = XvdFile::parse(&mut remote_file).await.expect("no err");
+    let mut remote_file = match streaming::PrefixCacheFile::new(reader, l, cache_path.clone()).await
+    {
+        Ok(file) => file,
+        Err(err) => {
+            eprintln!("could not open the download cache: {err}");
+            return;
+        }
+    };
+    let remote_xvd = match XvdFile::parse(&mut remote_file).await {
+        Ok(xvd) => xvd,
+        Err(err) => {
+            eprintln!("could not read the package header: {err}");
+            return;
+        }
+    };
     let mut rfiles: HashMap<String, SegmentFile> = HashMap::new();
     let mut lfiles: HashMap<String, SegmentFile> = HashMap::new();
 
@@ -274,10 +285,21 @@ where
         })
         .await
         .ok();
-        let sfiles = remote_xvd
+        let sfiles = match remote_xvd
             .parse_ntfs_segment_metadata(&mut remote_file, !rfiles.is_empty())
             .await
-            .expect("ok");
+        {
+            Ok(sfiles) => sfiles,
+            Err(err) => {
+                // Worth a real message: a download that cannot read the
+                // package's filesystem is not the player's fault, and a
+                // panic here tells them nothing.
+                eprintln!("could not read the package's file table: {err}");
+                // Leaving without the completion marker is how the rest of
+                // the program already recognises an unfinished download.
+                return;
+            }
+        };
         rfiles.extend(sfiles);
     }
 

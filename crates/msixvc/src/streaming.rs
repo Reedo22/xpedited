@@ -210,6 +210,10 @@ enum CacheWriteState {
     Idle,
     Seeking { offset: u64 },
     Writing,
+    /// Bytes are in the writer but not yet on disk. `cache_reader` is a
+    /// separate handle onto the same file and cannot see them until they
+    /// are, so the cached length must not count them yet.
+    Flushing { written: usize },
 }
 
 pub struct PrefixCacheFile<R> {
@@ -226,6 +230,7 @@ pub struct PrefixCacheFile<R> {
     cache_write_state: CacheWriteState,
     cache_write_pos: u64,
     upstream_buf: Vec<u8>,
+    cache_path: std::path::PathBuf,
 }
 
 impl<R> PrefixCacheFile<R>
@@ -254,6 +259,7 @@ where
             pos: 0,
             cache_reader,
             cache_writer,
+            cache_path: cache_path.to_path_buf(),
             cached_len: 0,
             pending_seek: None,
             pending_chunk: None,
@@ -362,6 +368,35 @@ where
                         self.cache_write_state = CacheWriteState::Seeking { offset: cached_len };
                     }
                 }
+                CacheWriteState::Flushing { written } => {
+                    match AsyncWrite::poll_flush(Pin::new(&mut self.cache_writer), cx) {
+                        Poll::Pending => return Poll::Pending,
+                        Poll::Ready(Err(err)) => {
+                            self.cache_write_state = CacheWriteState::Idle;
+                            return Poll::Ready(Err(err));
+                        }
+                        Poll::Ready(Ok(())) => {
+                            // Trust the filesystem rather than the count of
+                            // bytes handed to the writer: the reader is a
+                            // separate handle, and only what is really in
+                            // the file can be read back through it.
+                            self.pending_chunk_offset += written;
+                            self.cache_write_pos += written as u64;
+                            let claimed = self.cached_len + written as u64;
+                            let on_disk = std::fs::metadata(&self.cache_path)
+                                .map(|meta| meta.len())
+                                .unwrap_or(claimed);
+                            self.cached_len = claimed.min(on_disk);
+                            let chunk_len = chunk.len();
+                            if self.pending_chunk_offset >= chunk_len {
+                                self.pending_chunk = None;
+                                self.pending_chunk_offset = 0;
+                            }
+                            self.cache_write_state = CacheWriteState::Idle;
+                            return Poll::Ready(Ok(()));
+                        }
+                    }
+                }
                 CacheWriteState::Seeking { offset } => {
                     match AsyncSeek::poll_complete(Pin::new(&mut self.cache_writer), cx) {
                         Poll::Pending => return Poll::Pending,
@@ -398,15 +433,11 @@ where
                             )));
                         }
                         Poll::Ready(Ok(written)) => {
-                            self.pending_chunk_offset += written;
-                            self.cached_len += written as u64;
-                            self.cache_write_pos += written as u64;
-                            if self.pending_chunk_offset >= chunk.len() {
-                                self.pending_chunk = None;
-                                self.pending_chunk_offset = 0;
-                                self.cache_write_state = CacheWriteState::Idle;
-                            }
-                            return Poll::Ready(Ok(()));
+                            // Do not advance the cached length yet: these
+                            // bytes are only in the writer's buffer, and a
+                            // reader opened on the same path would hit end
+                            // of file looking for them.
+                            self.cache_write_state = CacheWriteState::Flushing { written };
                         }
                         Poll::Ready(Err(err)) => {
                             self.cache_write_state = CacheWriteState::Idle;

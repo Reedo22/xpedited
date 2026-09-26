@@ -8,6 +8,11 @@ pub struct MSATokenRequest {
     pub allow_ui: bool,
     #[serde(default, alias = "MSAFullTrust")]
     pub msa_full_trust: bool,
+    /// The address the title wants to call. Xbox Live issues a token per
+    /// relying party, so without this we can only guess - and guessing is
+    /// why titles get a token their service refuses.
+    #[serde(default)]
+    pub url: Option<String>,
 }
 
 #[derive(Serialize)]

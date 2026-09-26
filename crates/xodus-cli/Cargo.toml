@@ -2,7 +2,11 @@
 name = "xodus-cli"
 version = "0.1.0"
 edition = "2024"
-default-run = "xodus-cli"
+default-run = "xpedited"
+
+[[bin]]
+name = "xpedited"
+path = "src/main.rs"
 
 [dependencies]
 xodus = { path = "../xodus" }

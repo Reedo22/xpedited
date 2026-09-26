@@ -1,3 +1,7 @@
 /target
 .env
 samples
+
+# runtime logs games drop in the working directory
+kexBNet.log
+*.log

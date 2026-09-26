@@ -33,6 +33,46 @@ pub async fn handle(
     socket.write_all(&data).await
 }
 
+/// The service endpoint table, which says which relying party each Xbox
+/// Live host wants a token for. It changes rarely, so it is fetched once.
+static ENDPOINTS: tokio::sync::OnceCell<xodus::models::xbox::TitleMgtResponse> =
+    tokio::sync::OnceCell::const_new();
+
+/// Mint an `XBL3.0 x=<hash>;<token>` header for whatever service `url`
+/// belongs to.
+async fn xbox_live_token_for(
+    context: &mut SimpleContext,
+    url: &str,
+) -> Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>> {
+    let endpoints = ENDPOINTS
+        .get_or_try_init(|| xodus::api::xbox::title::get_title_management(&context.client))
+        .await?;
+    let endpoint = xodus::api::xbox::title::get_endpoint(url, endpoints)
+        .ok_or("no Xbox Live endpoint matches that address")?;
+    let relying_party = endpoint
+        .relying_party
+        .as_deref()
+        .ok_or("that endpoint needs no token")?;
+
+    let Token::Legacy(device) = context.tokens().get_device_sts_token()? else {
+        return Err("no device token".into());
+    };
+    let Token::Legacy(user) = context.tokens().get_user_sts_token()? else {
+        return Err("no user token".into());
+    };
+
+    let xsts = xodus::api::xbox::run(&context.client, device, user, relying_party).await;
+    let expiry = xsts.not_after.timestamp();
+    let payload = MSATokenResponse {
+        token: xodus::api::xbox::get_xsts_auth_header(xsts),
+        expiry,
+        device_rps: String::new(),
+        device_expiry: 0,
+    };
+    tracing::info!("issued an Xbox Live token for {relying_party} ({url})");
+    Ok(quick_xml::se::to_string(&payload)?.into_bytes())
+}
+
 pub async fn parse_message(
     context: &mut SimpleContext,
     message_type: XodusMessageType,
@@ -45,6 +85,23 @@ pub async fn parse_message(
             let string_buf = std::str::from_utf8(&buffer)?;
             tracing::debug!("String buffer: {string_buf:?}");
             let req = quick_xml::de::from_str::<MSATokenRequest>(string_buf)?;
+
+            // A title that told us where it is calling gets a token minted
+            // for that service. Xbox Live issues one token per relying
+            // party and refuses anything else, so this is the difference
+            // between XSAPI starting and XSAPI returning 0x800701AB.
+            if let Some(url) = req.url.as_deref().filter(|url| !url.is_empty()) {
+                match xbox_live_token_for(context, url).await {
+                    Ok(payload) => return Ok(payload),
+                    Err(err) => {
+                        // Fall through to the old behaviour rather than
+                        // failing the call outright: some callers do get
+                        // something useful from a plain MSA token.
+                        tracing::warn!("no Xbox Live token for {url}: {err}");
+                    }
+                }
+            }
+
             let Token::Legacy(token) = context.tokens().get_user_sts_token()? else {
                 return Ok(vec![]);
             };

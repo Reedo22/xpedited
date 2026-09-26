@@ -18,6 +18,18 @@ enum Vdf {
 }
 
 impl Vdf {
+    fn get_int(&self, key: &str) -> Option<u32> {
+        match self {
+            Vdf::Map(entries) => entries.iter().find(|(k, _)| k == key).and_then(|(_, v)| {
+                match v {
+                    Vdf::Int(number) => Some(*number),
+                    _ => None,
+                }
+            }),
+            _ => None,
+        }
+    }
+
     fn get_str(&self, key: &str) -> Option<&str> {
         match self {
             Vdf::Map(entries) => {
@@ -168,21 +180,21 @@ async fn fetch_art(client: &reqwest::Client, url: &str, to: &Path) -> bool {
 /// A launcher beside the game, the same shape the Heroic export writes, so
 /// Steam and Heroic can point at the same thing.
 fn write_launcher(source: &Path, wine: &str, prefix: Option<&str>) -> std::io::Result<PathBuf> {
-    let path = source.join("xodus-launch.sh");
+    let path = source.join("xpedited-launch.sh");
     if path.exists() {
         return Ok(path);
     }
     let cli = std::env::current_exe()
         .map(|path| path.display().to_string())
         .unwrap_or_else(|_| "xodus-cli".to_string());
-    let prefix = prefix.unwrap_or("$HOME/.local/share/xodus/prefix");
+    let prefix = prefix.unwrap_or("$HOME/.local/share/xpedited/prefix");
     let script = format!(
         "#!/usr/bin/env bash\n\
          set -uo pipefail\n\
-         XODUS_CLI=${{XODUS_CLI:-{cli}}}\n\
-         XODUS_WINE=${{XODUS_WINE:-{wine}}}\n\
+         XPEDITED_CLI=${{XPEDITED_CLI:-{cli}}}\n\
+         XPEDITED_WINE=${{XPEDITED_WINE:-{wine}}}\n\
          export WINEPREFIX=${{WINEPREFIX:-{prefix}}}\n\
-         exec \"$XODUS_CLI\" run '{source}' \"$XODUS_WINE\"\n",
+         exec \"$XPEDITED_CLI\" run '{source}' \"$XPEDITED_WINE\"\n",
         cli = cli,
         wine = wine,
         prefix = prefix,
@@ -201,6 +213,7 @@ pub async fn run(
     prefix: Option<String>,
     userdata: Option<String>,
     force: bool,
+    remove: bool,
     dry_run: bool,
 ) -> ExitCode {
     let market = market.unwrap_or("US".to_string());
@@ -226,6 +239,83 @@ pub async fn run(
     };
     let shortcuts_path = userdata.join("config").join("shortcuts.vdf");
     let grid = userdata.join("config").join("grid");
+
+    if remove {
+        let existing = std::fs::read(&shortcuts_path).unwrap_or_default();
+        let mut at = 0;
+        let Some(mut root) = parse_map(&existing, &mut at) else {
+            eprintln!(
+                "could not read {} - leaving it alone rather than risk your shortcuts",
+                shortcuts_path.display()
+            );
+            return ExitCode::FAILURE;
+        };
+        let mut dropped = vec![];
+        let kept;
+        {
+            let Vdf::Map(top) = &mut root else { unreachable!() };
+            let Some((_, Vdf::Map(shortcuts))) = top.iter_mut().find(|(key, _)| key == "shortcuts")
+            else {
+                eprintln!("{} has no shortcuts section", shortcuts_path.display());
+                return ExitCode::FAILURE;
+            };
+
+            // Ours are the ones pointed at a launcher we wrote. Anything else
+            // in here belongs to the player and is left exactly as it is.
+                shortcuts.retain(|(_, game)| {
+                let mine = game
+                    .get_str("Exe")
+                    .is_some_and(|exe| {
+                        // Shortcuts written before the rename carry the old name.
+                        exe.contains("xpedited-launch.sh") || exe.contains("xodus-launch.sh")
+                    });
+                if mine {
+                    dropped.push((
+                        game.get_int("appid").unwrap_or(0),
+                        game.get_str("AppName").unwrap_or("").to_string(),
+                    ));
+                }
+                !mine
+            });
+            // Steam indexes the entries by position, so close the gaps.
+            for (index, entry) in shortcuts.iter_mut().enumerate() {
+                entry.0 = index.to_string();
+            }
+            kept = shortcuts.len();
+        }
+
+        if dry_run {
+            println!("would remove {} of ours, keeping {kept}", dropped.len());
+            return ExitCode::SUCCESS;
+        }
+
+        let _ = std::fs::write(shortcuts_path.with_extension("vdf.xodus-backup"), &existing);
+        let mut out = vec![];
+        write_vdf(&mut out, &root);
+        let temporary = shortcuts_path.with_extension("vdf.tmp");
+        if let Err(err) = std::fs::write(&temporary, &out)
+            .and_then(|()| std::fs::rename(&temporary, &shortcuts_path))
+        {
+            let _ = std::fs::remove_file(&temporary);
+            eprintln!("could not write {}: {err}", shortcuts_path.display());
+            return ExitCode::FAILURE;
+        }
+
+        let mut art = 0;
+        for (id, _) in &dropped {
+            for suffix in ["p.jpg", "_hero.jpg", ".jpg", "_logo.png"] {
+                if std::fs::remove_file(grid.join(format!("{id}{suffix}"))).is_ok() {
+                    art += 1;
+                }
+            }
+        }
+
+        println!("removed {} games from Steam, {kept} shortcuts kept", dropped.len());
+        println!("  {art} pieces of artwork deleted from {}", grid.display());
+        println!("  a copy of the old file is beside it, ending .xodus-backup");
+        println!("start Steam again to see the change.");
+        return ExitCode::SUCCESS;
+    }
 
     // Find the extracted games.
     let mut games = vec![];
@@ -305,7 +395,7 @@ pub async fn run(
         });
 
         let launcher = if dry_run {
-            path.join("xodus-launch.sh")
+            path.join("xpedited-launch.sh")
         } else {
             match write_launcher(path, &wine, prefix.as_deref()) {
                 Ok(path) => path,
