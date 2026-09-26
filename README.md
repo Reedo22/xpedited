@@ -1,10 +1,6 @@
 <p align="center"><img width="128" src="assets/xpedited.png" /></p>
 <h1 align="center">Xpedited</h1>
 <p align="center">A fork of <a href="https://github.com/xodus-gaming/xodus">Xodus</a> - the great gaming migration to Linux</p>
-<p align="center">
-    <a href="https://discord.gg/ZG774FK4tq">
-        <img src="https://img.shields.io/discord/1123890623586504714?logo=discord&style=for-the-badge&color=red&label=Upstream+Discord" alt="Upstream Discord" />
-    </a>
 </p>
 
 > [!IMPORTANT]
