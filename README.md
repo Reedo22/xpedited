@@ -36,10 +36,6 @@ parts you touch.
 
 - **Multiplayer, achievements and presence.** `XUserGetTokenAndSignature` now
   mints a token for the service being called, but requests are unsigned.
-- **A black-screen group.** ~19 titles run and draw nothing. Confirmed on a real
-  display, not a test artifact, and inconsistent run to run.
-- **Direct3D 12 / shader model 6.** vkd3d does not expose SM6, so some titles
-  refuse to start and Godot 4's D3D12 shaders crash its DXIL parser.
 - **MSIXVC2 packages**, same as upstream.
 
 ## Installing
