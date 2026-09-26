@@ -38,27 +38,11 @@ Xodus follows Wine's clean room guidelines. Clean room provenance is what lets
 a reimplementation survive contact with lawyers, and it only works if nobody
 in the room has read the wrong thing. A single contributor pasting in
 machine-generated reverse engineering can put years of other people's careful
-work at risk. That policy is entirely reasonable and this fork is not an
-argument with it.
-
-The honest account of how this came about: this started as one person wanting
-to play games he had paid for on the operating system he uses, working with an
-AI assistant because that is how he works. The contribution policy lives in the
-organisation's `.github` repository rather than in this one, and neither of us
-went looking for it until the work was already done. Had we read it first,
-this would have been a fork from the beginning instead of becoming one.
-
-So it is a fork, and it stays downstream.
+work at risk.
 
 ## Please do not send any of this upstream
 
-Not as a pull request, not as a patch in their Discord, not as an issue with a
-diff in it. Reading LLM-derived reverse engineering is exactly the thing their
-clean room policy exists to prevent, and doing it to them by accident would be
-a genuinely rotten way to repay the project this is built on.
-
-Two things are still fine, and upstream welcomes both: bug reports that
-describe only a symptom and how to reproduce it, and documentation.
+Just don't please I did use AI too make this because I wanted to see what was possible and give back something somewhat useful.
 
 ## What this fork changes
 
@@ -78,6 +62,4 @@ them, and so does everything above.
 
 ## Also worth looking at
 
-[Ferestre](https://github.com/icex/ferestre) is another downstream project with
-the same goal, further along in several places. Its patch series answered two
-questions this fork had got wrong by guesswork.
+[Ferestre](https://github.com/icex/ferestre)
