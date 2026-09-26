@@ -36,27 +36,6 @@ parts you touch.
 - **Self-update.** `xpedited update` checks GitHub releases and replaces the
   binary in place.
 
-### How well does it work
-
-Of **126 PC Game Pass titles** tested end to end — downloaded, launched,
-screenshotted, then checked by eye — **71 of the 120 that could be downloaded
-started and drew themselves**. The other 6 are not distributed as MSIXVC (UWP
-only, or delisted) and cannot be installed at all.
-
-Every result is a screenshot, not an exit code: a game that shows an error
-dialog still has a live process and would otherwise count as a pass.
-
-Fixes that came out of that run:
-
-| Problem | Fix |
-|---|---|
-| `E_NO_TASK_QUEUE` — Xbox Live never started in any title | Create the default process task queue on demand |
-| Classic games showing "Launcher Error: CreateProcess" | Start the real game binary instead of the launcher stub |
-| Games looking for data at `.` | Start the game in its own folder, as Windows does |
-| Missing VC++ 2022 / .NET Desktop 8 | Install them into the prefix |
-| Wine faulting in `ntdll/path.c` | Guard a null `Name.Buffer` from `NtQueryObject` |
-| Downloads panicking mid-stream | Cache length now counts only flushed bytes |
-
 ### Not working yet
 
 - **Multiplayer, achievements and presence.** `XUserGetTokenAndSignature` now
